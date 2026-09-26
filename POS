@@ -1,0 +1,1353 @@
+```html
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Creative POS & ERP System</title>
+    <!-- Import Tailwind, Vue, Chart.js, dan Supabase JS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        @media print {
+            body * { visibility: hidden; }
+            #print-area, #print-area * { visibility: visible; }
+            #print-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; background: white; }
+            .no-print { display: none !important; }
+            
+            .print-58mm { width: 58mm; max-width: 58mm; margin: 0 auto; padding: 2mm; font-family: monospace; color: black; }
+            .print-58mm body { margin: 0; padding: 0; }
+            
+            .print-a4 { width: 210mm; min-height: 297mm; margin: 0 auto; padding: 15mm; font-family: 'Inter', sans-serif; color: black; background: white; }
+            @page { margin: 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased">
+    <div id="app" class="flex h-screen overflow-hidden">
+        
+        <!-- Loader -->
+        <div v-if="loading" class="fixed inset-0 bg-white backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
+            <p class="mt-4 text-slate-600 font-medium">Berkomunikasi dengan database...</p>
+        </div>
+
+        <!-- Layar Login -->
+        <div v-if="!isLoggedIn && !loading" class="w-full h-full flex items-center justify-center bg-slate-900 absolute inset-0 z-50">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-sm mx-4">
+                <div class="text-center mb-8">
+                    <h1 class="text-3xl font-bold text-blue-600 tracking-wider">CREATIVE<span class="text-slate-800">POS</span></h1>
+                    <p class="text-sm text-slate-500 mt-2">Masuk ke sistem database</p>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Username</label>
+                        <input type="text" v-model="loginForm.username" @keyup.enter="doLogin" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                        <input type="password" v-model="loginForm.password" @keyup.enter="doLogin" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                    <button @click="doLogin" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition shadow-lg mt-4">Masuk</button>
+                </div>
+            </div>
+        </div>
+
+        <template v-if="isLoggedIn && !loading">
+            <!-- AREA CETAK STRUK & A4 -->
+            <div id="print-area" class="hidden print:block bg-white text-black z-50">
+                
+                <!-- Struk 58mm Kasir & Pembelian -->
+                <div v-if="printMode === 'struk' && printData" class="print-58mm p-2">
+                    <div class="text-center font-bold text-lg">{{ getSetting('NamaToko') }}</div>
+                    <div class="text-center text-xs mb-2">{{ getSetting('Alamat') }} | {{ getSetting('NoTelp') }}</div>
+                    <div class="border-b mb-2 border-black border-dashed"></div>
+                    <div class="text-center font-bold text-sm mb-2" v-if="printData.tipe === 'Pembelian'">STRUK PEMBELIAN</div>
+                    <div class="text-xs mb-1">Tgl: {{ printData.tanggal }}</div>
+                    <div class="text-xs mb-2">No: {{ printData.id }}</div>
+                    <div class="text-xs mb-2">{{ printData.tipe === 'Pembelian' ? 'Supplier' : 'Plg' }}: {{ printData.kontak }}</div>
+                    <div class="border-b mb-2 border-black border-dashed"></div>
+                    <table class="text-xs mb-2 w-full">
+                        <tr v-for="item in printData.items" :key="item.Kode">
+                            <td colspan="3" class="pb-1">
+                                <div>{{ item.Nama }}</div>
+                                <div class="flex justify-between">
+                                    <span>{{ item.Qty }} {{ printData.tipe === 'Pembelian' ? (item.SatuanBeli||'Dus') : (item.UOM || item.SatuanJual || 'Pcs') }} x {{ formatRp(printData.tipe === 'Pembelian' ? item.HargaBeli : (item.UOM === item.SatuanBeli ? item.HargaJualGrosir : item.HargaJual)) }}</span>
+                                    <span>{{ formatRp(item.Qty * (printData.tipe === 'Pembelian' ? item.HargaBeli : (item.UOM === item.SatuanBeli ? item.HargaJualGrosir : item.HargaJual))) }}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                    <div class="border-b mb-2 border-black border-dashed"></div>
+                    <div class="flex justify-between font-bold text-sm"><span>TOTAL:</span><span>{{ formatRp(printData.total) }}</span></div>
+                    <div class="flex justify-between text-xs mt-1"><span>Telah Dibayar:</span><span>{{ formatRp(printData.bayar) }}</span></div>
+                    <div class="flex justify-between text-xs font-bold text-rose-600" v-if="printData.sisa > 0"><span>SISA TAGIHAN:</span><span>{{ formatRp(printData.sisa) }}</span></div>
+                    <div class="flex justify-between text-xs" v-else><span>KEMBALI:</span><span>{{ formatRp(printData.kembali) }}</span></div>
+                    <div class="text-center text-xs mt-4">{{ getSetting('FooterNota') }}</div>
+                </div>
+
+                <!-- Struk 58mm Cicilan Hutang/Piutang -->
+                <div v-if="printMode === 'struk_bayar' && printData" class="print-58mm p-2">
+                    <div class="text-center font-bold text-lg">{{ getSetting('NamaToko') }}</div>
+                    <div class="text-center text-xs mb-2">{{ getSetting('Alamat') }}</div>
+                    <div class="border-b mb-2 border-black border-dashed"></div>
+                    <div class="text-center font-bold text-sm mb-2">BUKTI BAYAR CICILAN {{ printData.tipe.toUpperCase() }}</div>
+                    <div class="text-xs mb-1">Tgl: {{ printData.tanggal }}</div>
+                    <div class="text-xs mb-1">Ref: {{ printData.id }}</div>
+                    <div class="text-xs mb-2">{{ printData.tipe === 'Hutang' ? 'Supplier' : 'Klien' }}: {{ printData.kontak }}</div>
+                    <div class="border-b mb-2 border-black border-dashed"></div>
+                    <div class="flex justify-between font-bold text-sm"><span>JUMLAH CICILAN:</span><span>{{ formatRp(printData.jumlah) }}</span></div>
+                    <div class="text-xs mt-2">Ket: {{ printData.keterangan }}</div>
+                    <div class="text-center text-xs mt-4">{{ getSetting('FooterNota') }}</div>
+                </div>
+
+                <!-- Invoice & Surat Jalan A4 -->
+                <div v-if="(printMode === 'invoice_a4' || printMode === 'surat_jalan') && printData" class="print-a4">
+                    <div class="flex justify-between items-start border-b-2 border-black pb-4 mb-4">
+                        <div>
+                            <h1 class="text-3xl font-bold uppercase">{{ printMode === 'surat_jalan' ? 'Surat Jalan' : 'Invoice ' + printData.tipe }}</h1>
+                            <p class="text-sm mt-1 font-bold">{{ getSetting('NamaToko') }}</p>
+                            <p class="text-sm">{{ getSetting('Alamat') }}</p>
+                            <p class="text-sm">Telp: {{ getSetting('NoTelp') }}</p>
+                        </div>
+                        <div class="text-right text-sm">
+                            <p class="font-bold">Kepada Yth:</p>
+                            <p class="text-lg">{{ printData.kontak }}</p>
+                            <p>Tgl: {{ printData.tanggal }}</p>
+                            <p>No: {{ printData.id }}</p>
+                        </div>
+                    </div>
+                    <table class="w-full text-sm text-left border-collapse border border-black mb-4">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="border border-black p-2 w-10 text-center">No</th>
+                                <th class="border border-black p-2">Nama Barang</th>
+                                <th class="border border-black p-2 text-center">Qty</th>
+                                <th v-if="printMode === 'invoice_a4'" class="border border-black p-2 text-right">Harga</th>
+                                <th v-if="printMode === 'invoice_a4'" class="border border-black p-2 text-right">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr v-for="(item, idx) in printData.items" :key="idx">
+                                <td class="border border-black p-2 text-center">{{ idx + 1 }}</td>
+                                <td class="border border-black p-2">{{ item.Nama }}</td>
+                                <td class="border border-black p-2 text-center">{{ item.Qty }} {{ printData.tipe === 'Pembelian' ? (item.SatuanBeli||'Dus') : (item.UOM || item.SatuanJual || 'Pcs') }}</td>
+                                <td v-if="printMode === 'invoice_a4'" class="border border-black p-2 text-right">{{ formatRp(printData.tipe === 'Pembelian' ? item.HargaBeli : (item.UOM === item.SatuanBeli ? item.HargaJualGrosir : item.HargaJual)) }}</td>
+                                <td v-if="printMode === 'invoice_a4'" class="border border-black p-2 text-right">{{ formatRp((printData.tipe === 'Pembelian' ? item.HargaBeli : (item.UOM === item.SatuanBeli ? item.HargaJualGrosir : item.HargaJual)) * item.Qty) }}</td>
+                            </tr>
+                        </tbody>
+                        <tfoot v-if="printMode === 'invoice_a4'">
+                            <tr><td colspan="4" class="border border-black p-2 text-right font-bold">TOTAL</td><td class="border border-black p-2 text-right font-bold">{{ formatRp(printData.total) }}</td></tr>
+                            <tr><td colspan="4" class="border border-black p-2 text-right">TELAH DIBAYAR</td><td class="border border-black p-2 text-right">{{ formatRp(printData.bayar) }}</td></tr>
+                            <tr v-if="printData.sisa > 0"><td colspan="4" class="border border-black p-2 text-right font-bold text-rose-600">SISA TAGIHAN</td><td class="border border-black p-2 text-right font-bold text-rose-600">{{ formatRp(printData.sisa) }}</td></tr>
+                            <tr v-else><td colspan="4" class="border border-black p-2 text-right">KEMBALI</td><td class="border border-black p-2 text-right">{{ formatRp(printData.kembali) }}</td></tr>
+                        </tfoot>
+                    </table>
+                    <div class="flex justify-between mt-12 text-center text-sm">
+                        <div class="w-1/3">
+                            <p class="mb-16">Hormat Kami,</p>
+                            <p class="border-t border-black inline-block px-8">( {{ getSetting('PihakToko') }} )</p>
+                        </div>
+                        <div class="w-1/3">
+                            <p class="mb-16">Penerima,</p>
+                            <p class="border-t border-black inline-block px-8">( {{ printData.kontak }} )</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Laporan HTML A4 Umum -->
+                <div v-if="printMode === 'laporan' && printHTMLContent" class="print-a4">
+                    <div class="text-center mb-6">
+                        <h2 class="text-2xl font-bold uppercase">{{ routeTitle }}</h2>
+                        <p class="text-sm text-gray-500">{{ getSetting('NamaToko') }} | Filter: {{ reportFilterDate || 'Semua Waktu' }}</p>
+                    </div>
+                    <div v-html="printHTMLContent"></div>
+                </div>
+            </div>
+            <!-- AKHIR AREA CETAK -->
+
+            <div :class="`bg-slate-900 text-white w-64 flex-shrink-0 transition-transform duration-300 absolute md:relative z-40 h-full ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`">
+                <div class="p-4 flex items-center justify-between border-b border-slate-800">
+                    <div class="font-bold text-xl tracking-wider text-blue-400">CREATIVE<span class="text-white">POS</span></div>
+                    <button @click="sidebarOpen = false" class="md:hidden text-slate-400 hover:text-white">✕</button>
+                </div>
+                <nav class="p-4 space-y-1 overflow-y-auto h-[calc(100vh-70px)]">
+                    <a v-if="hasAccess('dashboard')" @click="currentRoute = 'dashboard'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'dashboard' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">📊 Dashboard</a>
+                    
+                    <div v-if="hasAccess('pos') || hasAccess('pembelian')" class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-2 px-4">Transaksi</div>
+                    <a v-if="hasAccess('pos')" @click="currentRoute = 'pos'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'pos' ? 'bg-emerald-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">🛒 Kasir (POS)</a>
+                    <a v-if="hasAccess('pembelian')" @click="currentRoute = 'pembelian'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'pembelian' ? 'bg-orange-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">📥 Masuk Barang</a>
+                    
+                    <div v-if="hasAccess('barang') || hasAccess('supplier') || hasAccess('pelanggan') || hasAccess('karyawan')" class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-2 px-4">Master Data</div>
+                    <a v-if="hasAccess('barang')" @click="currentRoute = 'barang'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'barang' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">📦 Data Barang</a>
+                    <a v-if="hasAccess('supplier')" @click="currentRoute = 'supplier'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'supplier' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">🚚 Supplier</a>
+                    <a v-if="hasAccess('pelanggan')" @click="currentRoute = 'pelanggan'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'pelanggan' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">👥 Pelanggan</a>
+                    <a v-if="hasAccess('karyawan')" @click="currentRoute = 'karyawan'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'karyawan' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">🧑‍💼 Karyawan</a>
+                    
+                    <div v-if="hasAccess('lap_penjualan') || hasAccess('lap_piutang') || hasAccess('lap_pembelian') || hasAccess('lap_hutang') || hasAccess('lap_stok') || hasAccess('lap_labarugi') || hasAccess('lap_barangrusak') || hasAccess('pengaturan')" class="text-xs font-semibold text-slate-500 uppercase tracking-wider mt-6 mb-2 px-4">Laporan & Setting</div>
+                    <a v-if="hasAccess('lap_penjualan') || hasAccess('lap_piutang') || hasAccess('lap_pembelian') || hasAccess('lap_hutang') || hasAccess('lap_stok') || hasAccess('lap_labarugi') || hasAccess('lap_barangrusak')" @click="currentRoute = 'laporan'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'laporan' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">📑 Laporan Lengkap</a>
+                    <a v-if="hasAccess('pengaturan')" @click="currentRoute = 'pengaturan'; sidebarOpen = false" :class="`block px-4 py-2.5 rounded-lg cursor-pointer transition ${currentRoute === 'pengaturan' ? 'bg-slate-700 text-white shadow-lg' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`">⚙️ Pengaturan</a>
+                </nav>
+            </div>
+
+            <!-- Bagian Konten Kanan -->
+            <div class="flex-1 flex flex-col w-full">
+                <!-- Header Atas -->
+                <header class="bg-white shadow-sm border-b px-4 lg:px-6 h-16 flex items-center justify-between z-10 flex-shrink-0">
+                    <div class="flex items-center">
+                        <button @click="sidebarOpen = true" class="md:hidden mr-4 text-slate-500 hover:text-slate-800">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        </button>
+                        <h1 class="text-xl font-semibold text-slate-800 truncate">{{ routeTitle }}</h1>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-sm font-medium text-slate-500 hidden sm:block">{{ todayDate }}</div>
+                        <div class="flex items-center bg-slate-100 rounded-full pr-4 p-1 space-x-2">
+                            <div class="h-8 w-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs uppercase">{{ currentUser?.Nama.charAt(0) }}</div>
+                            <div class="text-xs">
+                                <p class="font-bold text-slate-700 leading-tight">{{ currentUser?.Nama }}</p>
+                                <p class="text-slate-500 leading-tight">{{ currentUser?.Jabatan }}</p>
+                            </div>
+                        </div>
+                        <button @click="doLogout" class="text-sm font-bold text-red-500 hover:text-red-700">Keluar</button>
+                    </div>
+                </header>
+
+                <main class="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 p-4 lg:p-6 pb-24">
+                    
+                    <!-- MENU: Dashboard -->
+                    <div v-if="currentRoute === 'dashboard' && hasAccess('dashboard')" class="space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 border-l-4 border-l-emerald-500">
+                                <p class="text-sm text-slate-500 mb-1">Penjualan Hari Ini</p>
+                                <h3 class="text-2xl font-bold text-slate-800">{{ formatRp(dashboardStats.penjualanHariIni) }}</h3>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 border-l-4 border-l-teal-500">
+                                <p class="text-sm text-slate-500 mb-1">Laba Bersih Hari Ini</p>
+                                <h3 class="text-2xl font-bold text-slate-800">{{ formatRp(dashboardStats.labaHariIni) }}</h3>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 border-l-4 border-l-orange-500">
+                                <p class="text-sm text-slate-500 mb-1">Pembelian Hari Ini</p>
+                                <h3 class="text-2xl font-bold text-slate-800">{{ formatRp(dashboardStats.pembelianHariIni) }}</h3>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 border-l-4 border-l-blue-500">
+                                <p class="text-sm text-slate-500 mb-1">Aset Barang (HPP)</p>
+                                <h3 class="text-2xl font-bold text-slate-800">{{ formatRp(dashboardStats.asetBarang) }}</h3>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 border-l-4 border-l-rose-500">
+                                <p class="text-sm text-slate-500 mb-1">Piutang Pelanggan</p>
+                                <h3 class="text-2xl font-bold text-slate-800">{{ formatRp(dashboardStats.piutangPelanggan) }}</h3>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100 border-l-4 border-l-purple-500">
+                                <p class="text-sm text-slate-500 mb-1">Sisa Hutang Supplier</p>
+                                <h3 class="text-2xl font-bold text-slate-800">{{ formatRp(dashboardStats.hutangSupplier) }}</h3>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                                <h3 class="font-bold text-slate-800 mb-4">Grafik 10 Barang Terlaris (Qty)</h3>
+                                <canvas id="topItemsChart" class="w-full max-h-[300px]"></canvas>
+                            </div>
+                            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+                                <h3 class="font-bold text-slate-800 mb-4 text-rose-600">Peringatan Stok Menipis</h3>
+                                <div class="space-y-3 max-h-[300px] overflow-y-auto">
+                                    <div v-for="b in (db.barang || []).filter(x => (x.StokBagus||0) <= 5)" class="flex justify-between items-center pb-2 border-b">
+                                        <div>
+                                            <p class="font-medium text-sm">{{ b.Nama }}</p>
+                                            <p class="text-xs text-slate-500">{{ b.Kode }}</p>
+                                        </div>
+                                        <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded text-xs font-bold">{{ b.StokBagus || 0 }} {{ b.SatuanJual||b.SatuanBeli }}</span>
+                                    </div>
+                                    <p v-if="(db.barang || []).filter(x => (x.StokBagus||0) <= 5).length === 0" class="text-sm text-slate-500 italic text-center py-4">Semua stok aman.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MENU: POS Kasir -->
+                    <div v-else-if="currentRoute === 'pos'" class="flex flex-col lg:flex-row gap-6 h-full">
+                        <div class="w-full lg:w-7/12 flex flex-col bg-white rounded-xl shadow-sm border border-slate-100 p-4">
+                            <div class="mb-4">
+                                <input type="text" v-model="posSearch" placeholder="Cari Nama/Kode Barang..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                <p class="text-xs text-slate-500 mt-1 italic" v-if="posSearch === ''">Menampilkan 10 barang terlaris...</p>
+                            </div>
+                            <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
+                                <div v-for="b in filteredPosBarang" @click="addToCart(b, 'pos')" class="border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-md transition bg-slate-50 flex flex-col justify-between h-28 relative">
+                                    <div>
+                                        <h4 class="font-semibold text-sm leading-tight text-slate-800">{{ b.Nama }}</h4>
+                                        <p class="text-xs text-slate-500 mt-1">{{ b.Kode }}</p>
+                                    </div>
+                                    <div class="flex justify-between items-end mt-2">
+                                        <span class="text-blue-600 font-bold text-sm">{{ formatRp(b.HargaJual) }}<span class="text-[10px] text-slate-500 font-normal"> /{{ b.SatuanJual||'Pcs' }}</span></span>
+                                        <span class="text-xs bg-slate-200 px-1.5 py-0.5 rounded font-medium">Sisa: {{ b.StokBagus || 0 }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="w-full lg:w-5/12 bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col h-[500px] lg:h-auto">
+                            <h3 class="font-bold text-lg mb-2 text-slate-800">Keranjang Kasir</h3>
+                            <div v-if="pos.editingId" class="bg-orange-100 text-orange-800 p-2 text-xs font-bold rounded mb-2 flex justify-between">
+                                <span>MODE EDIT: {{ pos.editingId }}</span><button @click="cancelEdit('pos')" class="underline">Batal</button>
+                            </div>
+                            
+                            <div class="grid grid-cols-2 gap-2 mb-3">
+                                <div><label class="text-xs block mb-1">Tanggal</label><input type="date" v-model="pos.tanggal" class="w-full p-2 text-sm border rounded"></div>
+                                <div>
+                                    <label class="text-xs block mb-1">Pelanggan</label>
+                                    <select v-model="pos.pelanggan" class="w-full p-2 text-sm border rounded">
+                                        <option value="">Umum (Cash)</option><option v-for="p in db.pelanggan" :value="p.Nama">{{ p.Nama }}</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div v-if="pos.pelanggan && pos.pelanggan !== 'Umum (Cash)' && pelangganPiutangTotal > 0" class="bg-rose-100 text-rose-700 p-2 text-xs border border-rose-200 font-bold rounded mb-2">
+                                ⚠️ Info: Pelanggan ini memiliki sisa tunggakan piutang sebesar {{ formatRp(pelangganPiutangTotal) }}
+                            </div>
+
+                            <div class="flex-1 overflow-y-auto border-t border-b py-2 mb-4 space-y-2">
+                                <div v-if="pos.items.length === 0" class="text-center text-slate-400 italic py-10 text-sm">Keranjang kosong</div>
+                                <div v-for="(item, idx) in pos.items" class="flex justify-between items-center bg-slate-50 p-2 rounded border">
+                                    <div class="flex-1">
+                                        <p class="font-medium text-sm line-clamp-1">{{ item.Nama }}</p>
+                                        <p class="text-xs text-slate-500 font-bold text-blue-600">{{ formatRp(item.UOM === item.SatuanBeli ? item.HargaJualGrosir : item.HargaJual) }}</p>
+                                    </div>
+                                    <div class="flex items-center space-x-2 justify-end">
+                                        <button @click="updateCartQty(idx, -1, 'pos')" class="w-7 h-7 bg-white border rounded text-slate-600 font-bold shadow-sm">-</button>
+                                        <div class="flex flex-col items-center">
+                                            <input type="number" v-model.number="item.Qty" class="w-10 text-center font-bold outline-none bg-transparent" min="1">
+                                            <select v-if="item.SatuanBeli !== item.SatuanJual && item.Isi > 1" v-model="item.UOM" class="text-[10px] font-bold bg-blue-100 text-blue-700 rounded outline-none px-1 py-0.5 mt-1 cursor-pointer text-center">
+                                                <option :value="item.SatuanJual">{{ item.SatuanJual }}</option>
+                                                <option :value="item.SatuanBeli">{{ item.SatuanBeli }}</option>
+                                            </select>
+                                            <span v-else class="text-[10px] text-slate-400 mt-1 font-bold">{{ item.SatuanJual || 'Pcs' }}</span>
+                                        </div>
+                                        <button @click="updateCartQty(idx, 1, 'pos')" class="w-7 h-7 bg-white border rounded text-slate-600 font-bold shadow-sm">+</button>
+                                        <button @click="pos.items.splice(idx,1)" class="ml-3 text-red-500 hover:text-red-700 text-xl font-bold">×</button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <div class="flex justify-between text-xl font-bold text-slate-800 border-t pt-2 border-dashed">
+                                    <span>TOTAL:</span> <span class="text-blue-600">{{ formatRp(posTotal) }}</span>
+                                </div>
+                            </div>
+                            <button @click="pos.items.length > 0 ? openPaymentModal('pos') : null" :class="`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition ${pos.items.length > 0 ? 'bg-emerald-600' : 'bg-slate-300 cursor-not-allowed'}`">
+                                BAYAR SEKARANG
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- MENU: Pembelian -->
+                    <div v-else-if="currentRoute === 'pembelian' && hasAccess('pembelian')" class="flex flex-col lg:flex-row gap-6 h-full">
+                        <div class="w-full lg:w-7/12 flex flex-col bg-white rounded-xl shadow-sm border border-slate-100 p-4">
+                            <div class="mb-4">
+                                <input type="text" v-model="beliSearch" placeholder="Cari Nama/Kode Barang..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none">
+                            </div>
+                            <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
+                                <div v-for="b in filteredBeliBarang" @click="addToCart(b, 'beli')" class="border rounded-lg p-3 cursor-pointer hover:border-orange-500 hover:shadow-md transition bg-slate-50 flex flex-col justify-between h-28">
+                                    <div>
+                                        <h4 class="font-semibold text-sm leading-tight text-slate-800">{{ b.Nama }}</h4>
+                                        <p class="text-[10px] bg-slate-200 inline-block px-1 rounded text-slate-600 mt-1">1 {{ b.SatuanBeli||'Dus' }} = {{ b.Isi||1 }} {{ b.SatuanJual||'Pcs' }}</p>
+                                    </div>
+                                    <div class="flex justify-between items-end mt-2">
+                                        <span class="text-orange-600 font-bold text-sm">{{ formatRp(b.HargaBeli) }}</span>
+                                        <span class="text-xs bg-slate-200 px-1.5 py-0.5 rounded font-medium">Stok: {{ b.StokBagus || 0 }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="w-full lg:w-5/12 bg-white rounded-xl shadow-sm border border-slate-100 p-4 flex flex-col h-[500px] lg:h-auto">
+                            <h3 class="font-bold text-lg mb-2 text-slate-800">Keranjang Pembelian</h3>
+                            <div v-if="beli.editingId" class="bg-orange-100 text-orange-800 p-2 text-xs font-bold rounded mb-2 flex justify-between">
+                                <span>MODE EDIT: {{ beli.editingId }}</span><button @click="cancelEdit('beli')" class="underline">Batal</button>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 mb-3">
+                                <div><label class="text-xs block mb-1">Tanggal</label><input type="date" v-model="beli.tanggal" class="w-full p-2 text-sm border rounded"></div>
+                                <div>
+                                    <label class="text-xs block mb-1">Supplier</label>
+                                    <select v-model="beli.supplier" class="w-full p-2 text-sm border rounded">
+                                        <option value="">Umum</option><option v-for="s in db.supplier" :value="s.Nama">{{ s.Nama }}</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="flex-1 overflow-y-auto border-t border-b py-2 mb-4 space-y-2">
+                                <div v-if="beli.items.length === 0" class="text-center text-slate-400 italic py-10 text-sm">Keranjang masuk kosong</div>
+                                <div v-for="(item, idx) in beli.items" class="bg-slate-50 p-2 rounded border flex flex-col space-y-2">
+                                    <div class="flex justify-between items-start">
+                                        <p class="font-medium text-sm flex-1">{{ item.Nama }}</p>
+                                        <button @click="beli.items.splice(idx,1)" class="text-red-500 font-bold ml-2">✕</button>
+                                    </div>
+                                    <div class="flex items-center space-x-2 text-sm">
+                                        <div class="flex flex-col w-1/2">
+                                            <label class="text-[10px] text-slate-500">Hrg per {{ item.SatuanBeli||'Dus' }}</label>
+                                            <input type="number" v-model.number="item.HargaBeli" class="border p-1 rounded outline-none w-full">
+                                        </div>
+                                        <div class="flex flex-col w-1/4">
+                                            <label class="text-[10px] text-slate-500">Qty ({{ item.SatuanBeli||'Dus' }})</label>
+                                            <input type="number" v-model.number="item.Qty" class="border p-1 rounded outline-none text-center w-full" min="1">
+                                        </div>
+                                        <div class="flex flex-col w-1/4 items-end justify-end pb-1 font-bold text-orange-600">
+                                            {{ formatRp(item.HargaBeli * item.Qty) }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <div class="flex justify-between text-xl font-bold text-slate-800 border-t pt-2 border-dashed">
+                                    <span>TOTAL:</span> <span class="text-orange-600">{{ formatRp(beliTotal) }}</span>
+                                </div>
+                            </div>
+                            <button @click="beli.items.length > 0 ? openPaymentModal('beli') : null" :class="`w-full py-4 rounded-xl font-bold text-lg text-white shadow-lg transition ${beli.items.length > 0 ? 'bg-orange-600' : 'bg-slate-300 cursor-not-allowed'}`">
+                                SIMPAN PEMBELIAN
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- MENU: Data Master (Barang, Karyawan, Supplier, Pelanggan) -->
+                    <div v-else-if="['barang', 'supplier', 'pelanggan', 'karyawan'].includes(currentRoute)" class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                        <div class="p-4 border-b bg-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                            <div class="relative w-full sm:w-1/3">
+                                <input type="text" v-model="tableSearch" placeholder="Cari data..." class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm">
+                                <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
+                            </div>
+                            <div class="flex space-x-2">
+                                <button v-if="currentRoute === 'barang'" @click="openModal('barangRusak')" class="bg-rose-100 text-rose-700 hover:bg-rose-200 px-4 py-2 rounded-lg text-sm font-medium">⚠️ Catat Barang Rusak</button>
+                                <button @click="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">+ Tambah {{ routeTitle.split(' ')[1] || routeTitle }}</button>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-100 text-slate-700 uppercase font-semibold text-xs border-b">
+                                    <tr><th v-for="col in tableColumns" class="p-3">{{ col.label }}</th><th class="p-3 text-right">Aksi</th></tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    <tr v-for="row in filteredTableData" class="hover:bg-slate-50 transition">
+                                        <td v-for="col in tableColumns" class="p-3 whitespace-nowrap">
+                                            <span v-if="col.type === 'currency'" class="font-medium">{{ formatRp(row[col.key]) }}</span>
+                                            <span v-else-if="col.key === 'StokBagus'" class="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">{{ row[col.key] || 0 }}</span>
+                                            <span v-else-if="col.key === 'StokRusak'" class="text-rose-600 font-bold bg-rose-50 px-2 py-1 rounded">{{ row[col.key] || 0 }}</span>
+                                            <span v-else>{{ row[col.key] }}</span>
+                                        </td>
+                                        <td class="p-3 text-right space-x-2 whitespace-nowrap">
+                                            <button @click="openModal(row)" class="text-blue-600 hover:underline">Edit</button>
+                                            <button @click="deleteData(row.Kode || row.ID)" class="text-red-500 hover:underline">Hapus</button>
+                                        </td>
+                                    </tr>
+                                    <tr v-if="filteredTableData.length === 0"><td :colspan="tableColumns.length + 1" class="p-8 text-center text-slate-400 italic">Data tidak ditemukan.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- MENU: Laporan -->
+                    <div v-else-if="currentRoute === 'laporan'" class="space-y-4">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                            <div>
+                                <label class="text-xs block mb-1">Jenis Laporan</label>
+                                <select v-model="reportType" class="w-full p-2 border rounded-lg text-sm">
+                                    <option v-if="hasAccess('lap_penjualan')" value="penjualan">Laporan Penjualan (POS)</option>
+                                    <option v-if="hasAccess('lap_piutang')" value="piutang">Daftar Piutang Pelanggan</option>
+                                    <option v-if="hasAccess('lap_piutang')" value="bayar_piutang">Riwayat Cicilan Piutang</option>
+                                    <option v-if="hasAccess('lap_pembelian')" value="pembelian">Laporan Masuk Barang</option>
+                                    <option v-if="hasAccess('lap_labarugi')" value="labarugi">Laporan Laba Rugi</option>
+                                    <option v-if="hasAccess('lap_stok')" value="stok">Aset & Stok Barang</option>
+                                    <option v-if="hasAccess('lap_barangrusak')" value="barangrusak">Riwayat Barang Rusak</option>
+                                    <option v-if="hasAccess('lap_hutang')" value="hutang">Daftar Hutang ke Supplier</option>
+                                    <option v-if="hasAccess('lap_hutang')" value="bayar_hutang">Riwayat Cicilan Hutang</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs block mb-1">Filter Tanggal</label>
+                                <input type="date" v-model="reportFilterDate" class="w-full p-2 border rounded-lg text-sm">
+                            </div>
+                            <div v-if="['hutang', 'pembelian'].includes(reportType)">
+                                <label class="text-xs block mb-1">Filter Supplier</label>
+                                <select v-model="reportFilterSupplier" class="w-full p-2 border rounded-lg text-sm">
+                                    <option value="">Semua</option><option v-for="s in (db.supplier || [])" :value="s.Nama">{{ s.Nama }}</option>
+                                </select>
+                            </div>
+                            <div v-if="['piutang', 'bayar_piutang'].includes(reportType)">
+                                <label class="text-xs block mb-1">Filter Pelanggan</label>
+                                <select v-model="reportFilterPelanggan" class="w-full p-2 border rounded-lg text-sm">
+                                    <option value="">Semua</option><option v-for="p in (db.pelanggan || [])" :value="p.Nama">{{ p.Nama }}</option>
+                                </select>
+                            </div>
+                            <div class="flex items-end">
+                                <button @click="printReport" class="w-full bg-slate-800 text-white p-2 rounded-lg font-medium text-sm">🖨️ Cetak A4</button>
+                            </div>
+                        </div>
+
+                        <!-- Card Laporan -->
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4" v-if="['penjualan', 'pembelian', 'labarugi'].includes(reportType)">
+                            <div class="bg-white p-3 rounded border" v-for="(val, key) in reportTotals">
+                                <p class="text-xs text-slate-500 uppercase">{{ key.replace(/([A-Z])/g, ' $1').trim() }}</p>
+                                <p class="text-lg font-bold">{{ formatRp(val) }}</p>
+                            </div>
+                        </div>
+
+                        <!-- Form Bayar Cicilan Hutang/Piutang -->
+                        <div v-if="reportType === 'hutang' && hasAccess('lap_hutang')" class="bg-purple-50 p-4 border rounded mb-4 flex flex-col md:flex-row gap-4 items-end">
+                            <div class="flex-1 w-full"><label class="text-xs font-bold text-purple-800">No. Trx Hutang</label><select v-model="formHutang.id" class="w-full p-2 border rounded text-sm"><option value="">-- Pilih --</option><option v-for="t in listHutang" :value="t.ID">{{ t.ID }} - Sisa: {{ formatRp(Number(t.Total) - Number(t.Bayar)) }}</option></select></div>
+                            <div class="w-full md:w-1/4"><label class="text-xs font-bold">Tgl Bayar</label><input type="date" v-model="formHutang.tanggal" class="w-full p-2 border rounded text-sm"></div>
+                            <div class="w-full md:w-1/4"><label class="text-xs font-bold">Nominal</label><input type="number" v-model="formHutang.jumlah" class="w-full p-2 border rounded text-sm"></div>
+                            <button @click="submitBayarHutang" class="bg-purple-600 text-white px-4 py-2 rounded font-bold text-sm">Simpan Cicilan</button>
+                        </div>
+                        <div v-if="reportType === 'piutang' && hasAccess('lap_piutang')" class="bg-rose-50 p-4 border rounded mb-4 flex flex-col md:flex-row gap-4 items-end">
+                            <div class="flex-1 w-full"><label class="text-xs font-bold text-rose-800">No. Trx Piutang</label><select v-model="formPiutang.id" class="w-full p-2 border rounded text-sm"><option value="">-- Pilih --</option><option v-for="t in listPiutang" :value="t.ID">{{ t.ID }} - Sisa: {{ formatRp(Number(t.Total) - Number(t.Bayar)) }}</option></select></div>
+                            <div class="w-full md:w-1/4"><label class="text-xs font-bold">Tgl Bayar</label><input type="date" v-model="formPiutang.tanggal" class="w-full p-2 border rounded text-sm"></div>
+                            <div class="w-full md:w-1/4"><label class="text-xs font-bold">Nominal</label><input type="number" v-model="formPiutang.jumlah" class="w-full p-2 border rounded text-sm"></div>
+                            <button @click="submitBayarPiutang" class="bg-rose-600 text-white px-4 py-2 rounded font-bold text-sm">Simpan Cicilan</button>
+                        </div>
+
+                        <!-- Tabel Dinamis Laporan -->
+                        <div class="bg-white rounded border overflow-x-auto">
+                            <div v-if="reportType === 'penjualan'" class="w-full text-left text-sm">
+                                <table class="w-full">
+                                    <thead><tr class="bg-slate-100 text-slate-600"><th class="border p-2">Tgl</th><th class="border p-2">ID</th><th class="border p-2">Pelanggan</th><th class="border p-2">Total</th><th class="border p-2">Laba</th><th class="border p-2">Status</th><th class="border p-2 no-print">Aksi</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="t in filteredReports" class="hover:bg-slate-50">
+                                            <td class="border p-2">{{ formatTgl(t.Tanggal) }}</td><td class="border p-2">{{ t.ID }}</td><td class="border p-2">{{ t.Pelanggan }}</td><td class="border p-2">{{ formatRp(t.Total) }}</td><td class="border p-2">{{ formatRp(t.Laba) }}</td>
+                                            <td class="border p-2"><span :class="t.Status==='Lunas'?'text-emerald-600 font-bold':'text-orange-600 font-bold'">{{ t.Status }}</span></td>
+                                            <td class="border p-2 no-print space-x-1 whitespace-nowrap">
+                                                <button @click="printTransaction(t, 'struk', 'Penjualan')" class="text-xs bg-slate-200 px-2 py-1 rounded">Struk</button>
+                                                <button @click="printTransaction(t, 'invoice_a4', 'Penjualan')" class="text-xs bg-slate-200 px-2 py-1 rounded">A4</button>
+                                                <button @click="printTransaction(t, 'surat_jalan', 'Penjualan')" class="text-xs bg-slate-200 px-2 py-1 rounded">S.Jalan</button>
+                                                <button v-if="isAdmin" @click="editTransaksi(t, 'pos')" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Edit</button>
+                                                <button v-if="isAdmin" @click="hapusTransaksi(t.ID, 'pos')" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Hapus</button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="bg-slate-100 font-bold text-slate-800"><td colspan="3" class="border p-2 text-right">TOTAL KESELURUHAN:</td><td class="border p-2 text-blue-600">{{ formatRp(filteredReports.reduce((s, i) => s + (Number(i.Total) || 0), 0)) }}</td><td class="border p-2 text-emerald-600">{{ formatRp(filteredReports.reduce((s, i) => s + (Number(i.Laba) || 0), 0)) }}</td><td colspan="2" class="border p-2 no-print"></td></tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                            <div v-else-if="reportType === 'pembelian'" class="w-full text-left text-sm">
+                                <table class="w-full">
+                                    <thead><tr class="bg-slate-100 text-slate-600"><th class="border p-2">Tgl</th><th class="border p-2">ID</th><th class="border p-2">Supplier</th><th class="border p-2">Total</th><th class="border p-2">Status</th><th class="border p-2 no-print">Aksi</th></tr></thead>
+                                    <tbody>
+                                        <tr v-for="t in filteredReports" class="hover:bg-slate-50">
+                                            <td class="border p-2">{{ formatTgl(t.Tanggal) }}</td><td class="border p-2">{{ t.ID }}</td><td class="border p-2">{{ t.Supplier }}</td><td class="border p-2">{{ formatRp(t.Total) }}</td>
+                                            <td class="border p-2"><span :class="t.Status==='Lunas'?'text-emerald-600 font-bold':'text-rose-600 font-bold'">{{ t.Status }}</span></td>
+                                            <td class="border p-2 no-print space-x-1">
+                                                <button @click="printTransaction(t, 'struk', 'Pembelian')" class="text-xs bg-slate-200 px-2 py-1 rounded">Struk</button>
+                                                <button @click="printTransaction(t, 'invoice_a4', 'Pembelian')" class="text-xs bg-slate-200 px-2 py-1 rounded">A4</button>
+                                                <button v-if="isAdmin" @click="editTransaksi(t, 'pembelian')" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">Edit</button>
+                                                <button v-if="isAdmin" @click="hapusTransaksi(t.ID, 'pembelian')" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded">Hapus</button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div v-else>
+                                <table class="w-full text-left border-collapse border text-sm">
+                                    <thead>
+                                        <tr class="bg-slate-100 text-slate-600">
+                                            <th v-for="col in reportDynamicColumns" class="border p-2">{{ col.label }}</th>
+                                            <th v-if="['bayar_hutang', 'bayar_piutang'].includes(reportType)" class="border p-2 no-print text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="row in filteredReports">
+                                            <td v-for="col in reportDynamicColumns" class="border p-2">{{ col.type === 'currency' ? formatRp(row[col.key]) : row[col.key] }}</td>
+                                            <td v-if="['bayar_hutang', 'bayar_piutang'].includes(reportType)" class="border p-2 no-print text-center"><button @click="printPayment(row, reportType)" class="text-xs bg-slate-200 px-2 py-1 rounded">Cetak Struk</button></td>
+                                        </tr>
+                                        <tr v-if="filteredReports.length===0"><td :colspan="10" class="border p-4 text-center">Data tidak ditemukan</td></tr>
+                                    </tbody>
+                                    <tfoot v-if="reportType === 'stok'">
+                                        <tr class="bg-slate-100 font-bold text-slate-800"><td colspan="5" class="border p-2 text-right">TOTAL MODAL SEMUA BARANG:</td><td class="border p-2 text-blue-600">{{ formatRp(filteredReports.reduce((s, i) => s + (i.TotalAset || 0), 0)) }}</td></tr>
+                                    </tfoot>
+                                    <tfoot v-if="reportType === 'hutang'">
+                                        <tr class="bg-slate-100 font-bold text-slate-800"><td colspan="3" class="border p-2 text-right">TOTAL HUTANG:</td><td class="border p-2">{{ formatRp(filteredReports.reduce((s, i) => s + (Number(i.Total) || 0), 0)) }}</td><td class="border p-2">{{ formatRp(filteredReports.reduce((s, i) => s + (Number(i.Bayar) || 0), 0)) }}</td><td class="border p-2 text-rose-600">{{ formatRp(filteredReports.reduce((s, i) => s + (i.SisaHutang || 0), 0)) }}</td></tr>
+                                    </tfoot>
+                                    <tfoot v-if="reportType === 'piutang'">
+                                        <tr class="bg-slate-100 font-bold text-slate-800"><td colspan="3" class="border p-2 text-right">TOTAL PIUTANG:</td><td class="border p-2">{{ formatRp(filteredReports.reduce((s, i) => s + (Number(i.Total) || 0), 0)) }}</td><td class="border p-2">{{ formatRp(filteredReports.reduce((s, i) => s + (Number(i.Bayar) || 0), 0)) }}</td><td class="border p-2 text-rose-600">{{ formatRp(filteredReports.reduce((s, i) => s + (i.SisaPiutang || 0), 0)) }}</td></tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- MENU: Pengaturan -->
+                    <div v-else-if="currentRoute === 'pengaturan' && hasAccess('pengaturan')" class="max-w-2xl bg-white p-6 rounded-xl shadow-sm border border-slate-100">
+                        <h3 class="font-bold text-lg mb-4 text-slate-800 border-b pb-2">Informasi Toko (Tampil di Struk)</h3>
+                        <div class="space-y-4 mb-8">
+                            <div><label class="text-sm mb-1 block">Nama Toko</label><input type="text" v-model="settingsForm.NamaToko" class="w-full p-2 border rounded-lg focus:ring-2"></div>
+                            <div><label class="text-sm mb-1 block">Alamat Toko</label><textarea v-model="settingsForm.Alamat" rows="2" class="w-full p-2 border rounded-lg focus:ring-2"></textarea></div>
+                            <div><label class="text-sm mb-1 block">No. Telp / WA</label><input type="text" v-model="settingsForm.NoTelp" class="w-full p-2 border rounded-lg focus:ring-2"></div>
+                            <div><label class="text-sm mb-1 block">Teks Footer Struk (Bawah)</label><input type="text" v-model="settingsForm.FooterNota" class="w-full p-2 border rounded-lg focus:ring-2"></div>
+                            <div><label class="text-sm mb-1 block">Nama TTD Invoice (Pihak Toko)</label><input type="text" v-model="settingsForm.PihakToko" class="w-full p-2 border rounded-lg focus:ring-2"></div>
+                            <button @click="saveSettings" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700">Simpan Pengaturan</button>
+                        </div>
+                        
+                        <h3 class="font-bold text-lg mb-4 mt-8 text-slate-800 border-b pb-2">Manajemen Level / Role Karyawan</h3>
+                        <div class="space-y-3 mb-8">
+                            <div v-for="(r, idx) in rolePermissions" class="flex justify-between items-center p-3 border rounded-lg bg-slate-50">
+                                <div>
+                                    <p class="font-bold text-slate-800">{{ r.role }}</p>
+                                    <p class="text-xs text-slate-500">{{ r.perms.length }} Akses Menu Terbuka</p>
+                                </div>
+                                <button @click="openRoleModal(idx)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded text-sm font-medium">Edit Akses</button>
+                            </div>
+                            <button @click="openRoleModal(-1)" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium border border-dashed border-slate-400">+ Tambah Level Baru</button>
+                        </div>
+                    </div>
+                </main>
+            </div>
+
+            <!-- MODAL FORM MASTER DATA -->
+            <div v-if="modal.show" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col">
+                    <div class="p-4 border-b bg-slate-50 flex justify-between items-center shrink-0">
+                        <h3 class="font-bold text-lg text-slate-800">{{ modal.title }}</h3>
+                        <button @click="modal.show = false" class="text-slate-400 hover:text-slate-700 text-xl font-bold">×</button>
+                    </div>
+                    <div class="p-4 space-y-4 overflow-y-auto flex-1">
+                        <div v-if="modal.type === 'barangRusak'" class="space-y-4">
+                            <div>
+                                <label class="text-sm block mb-1">Pilih Barang</label>
+                                <select v-model="barangRusakForm.KodeBarang" class="w-full p-2 border rounded-lg">
+                                    <option value="">-- Pilih --</option>
+                                    <option v-for="b in (db.barang || []).filter(x => (x.StokBagus || 0) > 0)" :value="b.Kode">{{ b.Kode }} - {{ b.Nama }} (Sisa: {{ b.StokBagus || 0 }} {{ b.SatuanJual||b.SatuanBeli }})</option>
+                                </select>
+                            </div>
+                            <div><label class="text-sm block mb-1">Qty Rusak (Unit Jual)</label><input type="number" v-model.number="barangRusakForm.Qty" min="1" class="w-full p-2 border rounded-lg"></div>
+                            <div><label class="text-sm block mb-1">Keterangan</label><input type="text" v-model="barangRusakForm.Keterangan" class="w-full p-2 border rounded-lg"></div>
+                            <button @click="submitBarangRusak" class="w-full bg-rose-600 text-white font-bold py-2 rounded-lg hover:bg-rose-700">Catat Barang Rusak</button>
+                        </div>
+                        <div v-else>
+                            <div v-for="field in formFields" :key="field.key" class="mb-3">
+                                <label class="text-sm font-medium text-slate-700 block mb-1">{{ field.label }}</label>
+                                <textarea v-if="field.type === 'textarea'" v-model="formData[field.key]" rows="2" class="w-full p-2 border rounded-lg outline-none"></textarea>
+                                <select v-else-if="field.type === 'select'" v-model="formData[field.key]" class="w-full p-2 border rounded-lg outline-none">
+                                    <option v-for="opt in field.options" :value="opt">{{ opt }}</option>
+                                </select>
+                                <input v-else :type="field.type" v-model="formData[field.key]" :readonly="field.readonly" :class="`w-full p-2 border rounded-lg outline-none ${field.readonly ? 'bg-slate-100' : ''}`">
+                            </div>
+                            <button @click="submitForm" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg mt-2 hover:bg-blue-700 shadow-md">Simpan Data</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODAL PEMBAYARAN KASIR -->
+            <div v-if="paymentModal.show" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden">
+                    <div class="p-4 border-b bg-emerald-600 flex justify-between items-center text-white">
+                        <h3 class="font-bold text-lg">Penyelesaian Transaksi</h3>
+                        <button @click="paymentModal.show = false" class="text-white hover:text-slate-200 text-xl font-bold">×</button>
+                    </div>
+                    <div class="p-6 space-y-4">
+                        <div>
+                            <p class="text-sm text-slate-500 text-center mb-1">Total Tagihan</p>
+                            <p class="text-3xl font-bold text-center text-slate-800">{{ formatRp(paymentModal.total) }}</p>
+                        </div>
+                        <div>
+                            <label class="text-sm font-medium text-slate-700 block mb-1">Jumlah Uang Diterima / Dibayar</label>
+                            <input type="number" v-model.number="paymentModal.bayar" class="w-full p-3 text-lg font-bold border-2 rounded-lg outline-none" min="0">
+                            <div class="flex gap-2 mt-2">
+                                <button @click="paymentModal.bayar = paymentModal.total" class="flex-1 bg-slate-100 text-xs py-1 rounded border">Uang Pas</button>
+                                <button @click="paymentModal.bayar = paymentModal.total + (50000 - (paymentModal.total % 50000))" class="flex-1 bg-slate-100 text-xs py-1 rounded border">Naik 50k</button>
+                            </div>
+                        </div>
+                        <div class="pt-4 border-t border-dashed">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm font-bold text-slate-600">{{ paymentModal.bayar >= paymentModal.total ? 'KEMBALIAN:' : 'SISA HUTANG/PIUTANG:' }}</span>
+                                <span :class="`text-xl font-bold ${paymentModal.bayar >= paymentModal.total ? 'text-blue-600' : 'text-rose-600'}`">{{ formatRp(Math.abs(paymentModal.bayar - paymentModal.total)) }}</span>
+                            </div>
+                        </div>
+                        <button @click="processTransaction" class="w-full bg-emerald-600 text-white font-bold py-3 rounded-lg mt-2 text-lg">SELESAI & CETAK STRUK</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODAL ROLE / LEVEL HAK AKSES -->
+            <div v-if="roleModal.show" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-xl overflow-hidden max-h-[90vh] flex flex-col">
+                    <div class="p-4 border-b bg-slate-50 flex justify-between items-center shrink-0">
+                        <h3 class="font-bold text-lg text-slate-800">Seting Level: {{ roleModal.role || 'Baru' }}</h3>
+                        <button @click="roleModal.show = false" class="text-slate-400 hover:text-slate-700 text-xl font-bold">×</button>
+                    </div>
+                    <div class="p-4 overflow-y-auto flex-1">
+                        <label class="text-sm font-medium text-slate-700 block mb-1">Nama Jabatan / Level</label>
+                        <input type="text" v-model="roleModal.role" :disabled="roleModal.role === 'Admin'" class="w-full p-2 border rounded-lg mb-4 outline-none focus:ring-2 focus:ring-blue-500">
+                        
+                        <label class="text-sm font-medium text-slate-700 block mb-2">Pilih Hak Akses Menu:</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <label v-for="perm in availablePermissions" class="flex items-center space-x-2 bg-slate-50 p-2 rounded border cursor-pointer hover:bg-slate-100">
+                                <input type="checkbox" :value="perm.id" v-model="roleModal.perms" :disabled="roleModal.role === 'Admin'" class="w-4 h-4 text-blue-600 rounded">
+                                <span class="text-sm text-slate-700">{{ perm.label }}</span>
+                            </label>
+                        </div>
+                        <p v-if="roleModal.role === 'Admin'" class="text-xs text-rose-500 mt-2">* Role Admin memiliki akses penuh dan tidak dapat diubah (Sistem Bawaan).</p>
+                    </div>
+                    <div class="p-4 border-t bg-slate-50 flex space-x-2">
+                        <button @click="saveRole" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg shadow-md">Simpan Level Sementara</button>
+                        <button v-if="roleModal.index !== -1 && roleModal.role !== 'Admin'" @click="deleteRole" class="bg-red-100 hover:bg-red-200 text-red-700 font-bold px-4 py-2.5 rounded-lg shadow-md">Hapus</button>
+                    </div>
+                </div>
+            </div>
+        </template> 
+
+        <div v-if="toast.show" :class="`fixed bottom-4 right-4 text-white px-6 py-3 rounded-xl shadow-xl font-medium transition-all duration-300 transform translate-y-0 z-50 ${toast.type === 'success' ? 'bg-emerald-600' : 'bg-rose-600'}`">
+            {{ toast.message }}
+        </div>
+    </div>
+
+    <script>
+        // === Konfigurasi Supabase Anda ===
+        const SUPABASE_URL = 'https://byxxgsxonadnezhzatkp.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5eHhnc3hvbmFkbmV6aHphdGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNjkwNzYsImV4cCI6MjEwNTk0NTA3Nn0.myF7SZhdQDztGbM9LpRWpwwOdurExhvS0sv-MaaQs5U';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+
+        createApp({
+            setup() {
+                const loading = ref(true);
+                const isLoggedIn = ref(false);
+                const currentUser = ref(null);
+                const loginForm = ref({ username: '', password: '' });
+
+                const sidebarOpen = ref(false);
+                const currentRoute = ref('pos');
+                const todayDate = ref(new Date().toLocaleDateString('en-CA'));
+                const toast = ref({ show: false, message: '', type: 'success' });
+                
+                const db = ref({
+                    barang: [], supplier: [], pelanggan: [], karyawan: [],
+                    penjualan: [], pembelian: [], pengaturan: [],
+                    barangRusak: [], pembayaranHutang: [], pembayaranPiutang: []
+                });
+
+                const tableSearch = ref('');
+                const posSearch = ref('');
+                const beliSearch = ref('');
+
+                const pos = ref({ tanggal: todayDate.value, pelanggan: '', items: [], editingId: null });
+                const beli = ref({ tanggal: todayDate.value, supplier: '', items: [], editingId: null });
+                
+                const modal = ref({ show: false, type: '', title: '' });
+                const formData = ref({});
+                const barangRusakForm = ref({ KodeBarang: '', Qty: 1, Keterangan: '' });
+
+                const paymentModal = ref({ show: false, type: '', total: 0, bayar: 0 });
+                const settingsForm = ref({ NamaToko: '', Alamat: '', NoTelp: '', FooterNota: '', PihakToko: '' });
+
+                const reportType = ref('penjualan');
+                const reportFilterDate = ref('');
+                const reportFilterSupplier = ref('');
+                const reportFilterPelanggan = ref(''); // Filter Piutang
+                const printMode = ref(''); 
+                const printData = ref(null);
+                const printHTMLContent = ref('');
+                const formHutang = ref({ id: '', tanggal: todayDate.value, jumlah: 0 });
+                const formPiutang = ref({ id: '', tanggal: todayDate.value, jumlah: 0 });
+
+                // DEFINISI MENU / ROLE SYSTEM
+                const availablePermissions = [
+                    { id: 'dashboard', label: 'Dashboard Utama' },
+                    { id: 'pos', label: 'Kasir (POS)' },
+                    { id: 'pembelian', label: 'Masuk Barang (Beli)' },
+                    { id: 'barang', label: 'Master Barang' },
+                    { id: 'supplier', label: 'Data Supplier' },
+                    { id: 'pelanggan', label: 'Data Pelanggan' },
+                    { id: 'karyawan', label: 'Data Karyawan' },
+                    { id: 'lap_penjualan', label: 'Laporan Penjualan (POS)' },
+                    { id: 'lap_piutang', label: 'Daftar & Cicilan Piutang' },
+                    { id: 'lap_pembelian', label: 'Laporan Masuk Barang' },
+                    { id: 'lap_hutang', label: 'Daftar & Cicilan Hutang' },
+                    { id: 'lap_labarugi', label: 'Laporan Laba Rugi' },
+                    { id: 'lap_stok', label: 'Laporan Aset & Stok' },
+                    { id: 'lap_barangrusak', label: 'Laporan Barang Rusak' },
+                    { id: 'pengaturan', label: 'Pengaturan Sistem & Hak Akses' }
+                ];
+                const rolePermissions = ref([]);
+                const roleModal = ref({ show: false, index: -1, role: '', perms: [] });
+
+                const hasAccess = (permId) => {
+                    if(!currentUser.value) return false;
+                    if(currentUser.value.Jabatan === 'Owner') return true; 
+                    const role = rolePermissions.value.find(r => r.role === currentUser.value.Jabatan);
+                    if(!role) return false;
+                    return role.perms.includes(permId);
+                };
+
+                const isAdmin = computed(() => hasAccess('pengaturan'));
+
+                const routeTitle = computed(() => {
+                    const titles = { dashboard: 'Dashboard', pos: 'Kasir (POS)', pembelian: 'Masuk Barang (Beli)', barang: 'Master Barang', supplier: 'Data Supplier', pelanggan: 'Data Pelanggan', karyawan: 'Data Karyawan', laporan: 'Laporan Lengkap', pengaturan: 'Pengaturan' };
+                    return titles[currentRoute.value] || 'Creative POS';
+                });
+
+                const formatRp = (angka) => 'Rp ' + (angka || 0).toLocaleString('id-ID');
+                const formatTgl = (tgl) => {
+                    if(!tgl) return '-';
+                    try { const d = new Date(tgl); return `${d.getDate().toString().padStart(2,'0')}/${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getFullYear()}`; } 
+                    catch(e) { return String(tgl).split('T')[0]; }
+                };
+                const getSetting = (key) => { const set = (db.value.pengaturan || []).find(s => s.Key === key); return set ? set.Value : ''; };
+                const showToast = (msg, typ = 'success') => { toast.value = { show: true, message: msg, type: typ }; setTimeout(() => toast.value.show = false, 3000); };
+
+                // === SUPABASE HELPER FUNCTIONS === //
+                
+                const loadInitialData = async () => {
+                    try {
+                        loading.value = true;
+                        const responses = await Promise.all([
+                            supabaseClient.from('Barang').select('*'), supabaseClient.from('Supplier').select('*'),
+                            supabaseClient.from('Pelanggan').select('*'), supabaseClient.from('Karyawan').select('*'),
+                            supabaseClient.from('Penjualan').select('*'), supabaseClient.from('Pembelian').select('*'),
+                            supabaseClient.from('BarangRusak').select('*'), supabaseClient.from('PembayaranHutang').select('*'),
+                            supabaseClient.from('PembayaranPiutang').select('*'), supabaseClient.from('Pengaturan').select('*')
+                        ]);
+                        
+                        let pesanError = '';
+                        responses.forEach((res, index) => {
+                            if (res.error) pesanError += `Tabel ${index}: ${res.error.message} \n`;
+                        });
+                        
+                        if (pesanError !== '') {
+                            alert("Koneksi Supabase Ditolak!\n\nPesan Error:\n" + pesanError);
+                            return; 
+                        }
+
+                        db.value.barang = responses[0].data || [];
+                        db.value.supplier = responses[1].data || [];
+                        db.value.pelanggan = responses[2].data || [];
+                        db.value.karyawan = responses[3].data || [];
+                        db.value.penjualan = responses[4].data || [];
+                        db.value.pembelian = responses[5].data || [];
+                        db.value.barangRusak = responses[6].data || [];
+                        db.value.pembayaranHutang = responses[7].data || [];
+                        db.value.pembayaranPiutang = responses[8].data || [];
+                        db.value.pengaturan = responses[9].data || [];
+
+                        // Proses Pengaturan (Pisahkan RolePermissions dengan Setting Biasa)
+                        (db.value.pengaturan || []).forEach(s => {
+                            if(s.Key !== 'RolePermissions') settingsForm.value[s.Key] = s.Value;
+                        });
+
+                        const roleSet = (db.value.pengaturan || []).find(s => s.Key === 'RolePermissions');
+                        if (roleSet && roleSet.Value) {
+                            try { rolePermissions.value = JSON.parse(roleSet.Value); } catch(e) {}
+                        }
+                        
+                        // Isi Default Roles Jika Pertama Kali / Kosong
+                        if (rolePermissions.value.length === 0) {
+                            rolePermissions.value = [
+                                { role: 'Admin', perms: availablePermissions.map(p => p.id) },
+                                { role: 'Kasir', perms: ['pos', 'lap_penjualan', 'lap_piutang'] }
+                            ];
+                        }
+
+                    } catch (e) { 
+                        alert('Error Sistem: ' + e.message); 
+                        console.error(e); 
+                    } finally { 
+                        loading.value = false; 
+                    }
+                };
+
+                const generateId = async (table, prefix, length) => {
+                    const idField = table === 'Karyawan' || table === 'Barang' ? 'Kode' : 'ID';
+                    const { data } = await supabaseClient.from(table).select(idField).order(idField, { ascending: false }).limit(1);
+                    let nextId = 1;
+                    if (data && data.length > 0 && data[0][idField]) {
+                        nextId = parseInt(String(data[0][idField]).replace(prefix, '')) + 1;
+                        if(isNaN(nextId)) nextId = 1;
+                    }
+                    return prefix + nextId.toString().padStart(length, '0');
+                };
+
+                const doLogin = () => {
+                    const usr = String(loginForm.value.username).trim();
+                    const pwd = String(loginForm.value.password).trim();
+                    
+                    const user = (db.value.karyawan || []).find(k => 
+                        String(k.Username).trim() === usr && String(k.Password).trim() === pwd
+                    );
+                    
+                    if(user) {
+                        currentUser.value = user; isLoggedIn.value = true;
+                        
+                        // Arahkan Pintu Masuk Sesuai Akses
+                        if(hasAccess('dashboard')) currentRoute.value = 'dashboard';
+                        else if(hasAccess('pos')) currentRoute.value = 'pos';
+                        else currentRoute.value = 'laporan';
+                        
+                        reportType.value = 'penjualan'; showToast(`Selamat datang, ${user.Nama}!`);
+                    } else { 
+                        showToast('Username atau Password salah!', 'error'); 
+                    }
+                };
+
+                const doLogout = () => { isLoggedIn.value = false; currentUser.value = null; loginForm.value = { username: '', password: '' }; };
+
+                const getTopItems = (query, dbList) => {
+                    if(!dbList || dbList.length === 0) return [];
+                    if (query.trim() !== '') { const q = query.toLowerCase(); return dbList.filter(b => b.Nama.toLowerCase().includes(q) || b.Kode.toLowerCase().includes(q)); }
+                    return dbList.slice(0, 10);
+                };
+
+                const filteredPosBarang = computed(() => getTopItems(posSearch.value, db.value.barang));
+                const filteredBeliBarang = computed(() => getTopItems(beliSearch.value, db.value.barang));
+
+                const formFields = computed(() => {
+                    if(currentRoute.value === 'barang') return [
+                        { key: 'Kode', label: 'Kode Barang', type: 'text', readonly: !!formData.value.Kode },
+                        { key: 'Nama', label: 'Nama Barang', type: 'text' },
+                        { key: 'SatuanBeli', label: 'Satuan Beli (Grosir - Misal: Dus)', type: 'text' },
+                        { key: 'SatuanJual', label: 'Satuan Jual (Ecer - Misal: Pcs)', type: 'text' },
+                        { key: 'Isi', label: 'Isi per Satuan Beli (Misal: 10)', type: 'number' },
+                        { key: 'HargaBeli', label: 'Modal Beli per Satuan Beli (Grosir)', type: 'number' },
+                        { key: 'HargaJualGrosir', label: 'Harga Jual per Satuan Beli (Grosir)', type: 'number' },
+                        { key: 'HargaJual', label: 'Harga Jual per Satuan Jual (Ecer)', type: 'number' },
+                        { key: 'StokBagus', label: 'Edit Stok Bagus Manual (Satuan Ecer)', type: 'number' }
+                    ];
+                    if(currentRoute.value === 'karyawan') return [
+                        { key: 'Kode', label: 'Kode Karyawan', type: 'text', readonly: true }, { key: 'Nama', label: 'Nama Lengkap', type: 'text' }, 
+                        { key: 'Jabatan', label: 'Jabatan / Level', type: 'select', options: rolePermissions.value.map(r => r.role) }, 
+                        { key: 'Username', label: 'Username Login', type: 'text' }, { key: 'Password', label: 'Password', type: 'text' }
+                    ];
+                    return [
+                        { key: 'ID', label: 'ID', type: 'text', readonly: true }, { key: 'Nama', label: 'Nama Lengkap', type: 'text' }, { key: 'NoHP', label: 'No. HP / WA', type: 'text' }, { key: 'Alamat', label: 'Alamat Lengkap', type: 'textarea' }
+                    ];
+                });
+
+                const tableColumns = computed(() => {
+                    if(currentRoute.value === 'barang') return [{key:'Kode', label:'Kode'}, {key:'Nama', label:'Nama'}, {key:'SatuanBeli', label:'S.Beli'}, {key:'SatuanJual', label:'S.Jual'}, {key:'Isi', label:'Isi'}, {key:'HargaBeli', label:'Hrg Beli (Grosir)', type:'currency'}, {key:'HargaJualGrosir', label:'Hrg Jual (Grosir)', type:'currency'}, {key:'HargaJual', label:'Hrg Jual (Ecer)', type:'currency'}, {key:'StokBagus', label:'Stok (Ecer)'}, {key:'StokRusak', label:'Rusak'}];
+                    if(currentRoute.value === 'karyawan') return [{key:'Kode', label:'Kode'}, {key:'Nama', label:'Nama'}, {key:'Jabatan', label:'Level'}, {key:'Username', label:'Username'}];
+                    return [{key:'ID', label:'ID'}, {key:'Nama', label:'Nama'}, {key:'NoHP', label:'No HP'}, {key:'Alamat', label:'Alamat'}];
+                });
+
+                const filteredTableData = computed(() => {
+                    const data = db.value[currentRoute.value] || [];
+                    if(!tableSearch.value) return data;
+                    const q = tableSearch.value.toLowerCase();
+                    return data.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+                });
+
+                const posTotal = computed(() => pos.value.items.reduce((sum, item) => sum + ((item.UOM === item.SatuanBeli ? (item.HargaJualGrosir || (item.HargaJual * item.Isi)) : item.HargaJual) * item.Qty), 0));
+                const beliTotal = computed(() => beli.value.items.reduce((sum, item) => sum + (item.HargaBeli * item.Qty), 0));
+
+                const listHutang = computed(() => (db.value.pembelian||[]).filter(x => x.Status !== 'Lunas' && (!reportFilterSupplier.value || x.Supplier === reportFilterSupplier.value)));
+                const listPiutang = computed(() => (db.value.penjualan||[]).filter(x => x.Status !== 'Lunas' && (!reportFilterPelanggan.value || x.Pelanggan === reportFilterPelanggan.value)));
+
+                const filteredReports = computed(() => {
+                    let d = db.value[reportType.value === 'labarugi' ? 'penjualan' : (reportType.value === 'stok' ? 'barang' : (reportType.value === 'piutang' ? 'penjualan' : (reportType.value === 'hutang' ? 'pembelian' : (reportType.value === 'barangrusak' ? 'barangRusak' : (reportType.value === 'bayar_hutang' ? 'pembayaranHutang' : (reportType.value === 'bayar_piutang' ? 'pembayaranPiutang' : reportType.value))))))] || [];
+                    
+                    if(reportType.value === 'stok') d = d.map(x => ({ ...x, TotalAset: ((Number(x.StokBagus)||0) / (Number(x.Isi)||1)) * (Number(x.HargaBeli)||0) }));
+                    
+                    if(reportType.value === 'piutang') {
+                        d = d.filter(x => x.Status !== 'Lunas').map(x => ({ ...x, SisaPiutang: (Number(x.Total)||0) - (Number(x.Bayar)||0) }));
+                        if (reportFilterPelanggan.value) d = d.filter(x => x.Pelanggan === reportFilterPelanggan.value);
+                    }
+                    if(reportType.value === 'bayar_piutang' && reportFilterPelanggan.value) {
+                        d = d.filter(x => x.Pelanggan === reportFilterPelanggan.value);
+                    }
+                    
+                    if(reportType.value === 'hutang') {
+                        d = d.filter(x => x.Status !== 'Lunas').map(x => ({ ...x, SisaHutang: (Number(x.Total)||0) - (Number(x.Bayar)||0) }));
+                        if (reportFilterSupplier.value) d = d.filter(x => x.Supplier === reportFilterSupplier.value);
+                    }
+                    if(reportType.value === 'pembelian' && reportFilterSupplier.value) d = d.filter(x => x.Supplier === reportFilterSupplier.value);
+                    
+                    if(reportFilterDate.value && reportType.value !== 'stok') d = d.filter(x => (x.Tanggal || '').startsWith(reportFilterDate.value));
+                    if(d.length > 0 && d[0].Tanggal) d.sort((a,b) => new Date(b.Tanggal) - new Date(a.Tanggal));
+                    return d;
+                });
+
+                const reportDynamicColumns = computed(() => {
+                    if(reportType.value === 'stok') return [{key:'Kode', label:'Kode'}, {key:'Nama', label:'Nama'}, {key:'SatuanBeli', label:'S.Beli'}, {key:'SatuanJual', label:'S.Jual'}, {key:'StokBagus', label:'Stok Bagus'}, {key:'StokRusak', label:'Stok Rusak'}, {key:'HargaBeli', label:'Modal/Dus', type:'currency'}, {key:'TotalAset', label:'Total Keseluruhan', type:'currency'}];
+                    if(reportType.value === 'barangrusak') return [{key:'Tanggal', label:'Tgl'}, {key:'KodeBarang', label:'Kode'}, {key:'NamaBarang', label:'Barang'}, {key:'Qty', label:'Qty Rusak'}, {key:'Keterangan', label:'Keterangan'}];
+                    if(reportType.value === 'piutang') return [{key:'Tanggal', label:'Tgl'}, {key:'ID', label:'No Trx'}, {key:'Pelanggan', label:'Pelanggan'}, {key:'Total', label:'Total', type:'currency'}, {key:'Bayar', label:'Telah Dibayar', type:'currency'}, {key:'SisaPiutang', label:'Sisa Piutang', type:'currency'}];
+                    if(reportType.value === 'hutang') return [{key:'Tanggal', label:'Tgl'}, {key:'ID', label:'No Trx'}, {key:'Supplier', label:'Supplier'}, {key:'Total', label:'Total', type:'currency'}, {key:'Bayar', label:'Telah Dibayar', type:'currency'}, {key:'SisaHutang', label:'Sisa Hutang', type:'currency'}];
+                    if(reportType.value === 'bayar_hutang') return [{key:'Tanggal', label:'Tgl Bayar'}, {key:'ID_Trx', label:'No. Struk Hutang'}, {key:'Supplier', label:'Supplier'}, {key:'JumlahBayar', label:'Nominal Cicilan', type:'currency'}];
+                    if(reportType.value === 'bayar_piutang') return [{key:'Tanggal', label:'Tgl Bayar'}, {key:'ID_Trx', label:'No. Struk Piutang'}, {key:'Pelanggan', label:'Pelanggan'}, {key:'JumlahBayar', label:'Nominal Cicilan', type:'currency'}];
+                    return [];
+                });
+
+                const reportTotals = computed(() => {
+                    let total=0, laba=0;
+                    if(reportType.value === 'penjualan' || reportType.value === 'labarugi') {
+                        filteredReports.value.forEach(t => { total += Number(t.Total||0); laba += Number(t.Laba||0); });
+                        return { TotalOmset: total, TotalLabaKotor: laba };
+                    } else if (reportType.value === 'pembelian') {
+                        filteredReports.value.forEach(t => total += Number(t.Total||0));
+                        return { TotalBelanja: total };
+                    } return {};
+                });
+
+                const dashboardStats = computed(() => {
+                    let tgl = todayDate.value;
+                    let pJual = (db.value.penjualan||[]).filter(x => (x.Tanggal||'').startsWith(tgl)).reduce((s,i) => s + Number(i.Total||0), 0);
+                    let labaJual = (db.value.penjualan||[]).filter(x => (x.Tanggal||'').startsWith(tgl)).reduce((s,i) => s + Number(i.Laba||0), 0);
+                    let pBeli = (db.value.pembelian||[]).filter(x => (x.Tanggal||'').startsWith(tgl)).reduce((s,i) => s + Number(i.Total||0), 0);
+                    let aset = (db.value.barang||[]).reduce((s,i) => s + (((Number(i.StokBagus)||0) / (Number(i.Isi)||1)) * Number(i.HargaBeli||0)), 0);
+                    let piutang = (db.value.penjualan||[]).filter(x => x.Status !== 'Lunas').reduce((s,i) => s + (Number(i.Total||0) - Number(i.Bayar||0)), 0);
+                    let hutang = (db.value.pembelian||[]).filter(x => x.Status !== 'Lunas').reduce((s,i) => s + (Number(i.Total||0) - Number(i.Bayar||0)), 0);
+                    return { penjualanHariIni: pJual, labaHariIni: labaJual, pembelianHariIni: pBeli, asetBarang: aset, piutangPelanggan: piutang, hutangSupplier: hutang };
+                });
+
+                // Kalkulasi Otomatis Info Sisa Piutang Pelanggan di POS Kasir
+                const pelangganPiutangTotal = computed(() => {
+                    if (!pos.value.pelanggan || pos.value.pelanggan === 'Umum (Cash)') return 0;
+                    return (db.value.penjualan || [])
+                        .filter(x => x.Pelanggan === pos.value.pelanggan && x.Status !== 'Lunas')
+                        .reduce((sum, item) => sum + ((Number(item.Total) || 0) - (Number(item.Bayar) || 0)), 0);
+                });
+
+                const renderChart = () => {
+                    if (currentRoute.value !== 'dashboard' || !hasAccess('dashboard')) return;
+                    nextTick(() => {
+                        const ctx = document.getElementById('topItemsChart');
+                        if(!ctx) return;
+                        let itemMap = {};
+                        (db.value.penjualan||[]).forEach(trx => {
+                            let items = typeof trx.ItemsJSON === 'string' ? JSON.parse(trx.ItemsJSON||'[]') : (trx.ItemsJSON||[]);
+                            items.forEach(i => { itemMap[i.Nama] = (itemMap[i.Nama] || 0) + Number(i.Qty||0); });
+                        });
+                        let sorted = Object.keys(itemMap).map(k => ({nama: k, qty: itemMap[k]})).sort((a,b)=>b.qty-a.qty).slice(0,10);
+                        
+                        if(window.myChart) window.myChart.destroy();
+                        window.myChart = new Chart(ctx, {
+                            type: 'bar',
+                            data: { labels: sorted.map(i=>i.nama), datasets: [{ label: 'Qty Terjual', data: sorted.map(i=>i.qty), backgroundColor: '#3b82f6', borderRadius: 4 }] },
+                            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+                        });
+                    });
+                };
+
+                watch(currentRoute, (newRoute) => { if(newRoute === 'dashboard') renderChart(); });
+
+                const openModal = (row = null) => {
+                    if (row === 'barangRusak') { barangRusakForm.value = { KodeBarang: '', Qty: 1, Keterangan: '' }; modal.value = { show: true, type: 'barangRusak', title: 'Catat Barang Rusak' }; return; }
+                    modal.value = { show: true, type: currentRoute.value, title: (row ? 'Edit ' : 'Tambah ') + (routeTitle.value.split(' ')[1] || routeTitle.value) };
+                    formData.value = row ? JSON.parse(JSON.stringify(row)) : (currentRoute.value === 'karyawan' ? {Jabatan: 'Kasir'} : (currentRoute.value === 'barang' ? {Isi: 1} : {}));
+                };
+
+                // === FUNGSI DATABASE (SUPABASE) === //
+
+                const getTableForRoute = () => {
+                    let map = { barang: 'Barang', supplier: 'Supplier', pelanggan: 'Pelanggan', karyawan: 'Karyawan' };
+                    return map[currentRoute.value];
+                };
+                const getTableIdField = () => currentRoute.value === 'karyawan' || currentRoute.value === 'barang' ? 'Kode' : 'ID';
+
+                const submitForm = async () => {
+                    if (currentRoute.value === 'barang') {
+                        if (!formData.value.SatuanBeli || !formData.value.SatuanJual || !formData.value.Isi || !formData.value.HargaBeli || !formData.value.HargaJual) {
+                            return showToast('Harap lengkapi semua field satuan dan harga!', 'error');
+                        }
+                        if (formData.value.SatuanBeli !== formData.value.SatuanJual && formData.value.Isi <= 1) return showToast('Isi harus lebih dari 1!', 'error');
+                    }
+
+                    loading.value = true;
+                    try {
+                        const table = getTableForRoute();
+                        const idField = getTableIdField();
+                        let isEdit = !!formData.value[idField];
+                        
+                        let dataToSave = { ...formData.value };
+                        if (!isEdit) {
+                            let prefix = { barang: 'BRG-', supplier: 'SUP-', pelanggan: 'PLG-', karyawan: 'KAR-' }[currentRoute.value];
+                            dataToSave[idField] = await generateId(table, prefix, 4);
+                        }
+
+                        if(currentRoute.value === 'barang') {
+                            dataToSave.StokBagus = dataToSave.StokBagus || 0;
+                            dataToSave.StokRusak = dataToSave.StokRusak || 0;
+                        }
+
+                        if (isEdit) await supabaseClient.from(table).update(dataToSave).eq(idField, dataToSave[idField]);
+                        else await supabaseClient.from(table).insert([dataToSave]);
+
+                        const { data } = await supabaseClient.from(table).select('*');
+                        db.value[currentRoute.value] = data;
+                        
+                        modal.value.show = false; showToast('Berhasil disimpan');
+                    } catch(e) { showToast('Gagal', 'error'); console.error(e); } finally { loading.value = false; }
+                };
+
+                const deleteData = async (id) => {
+                    if(!confirm('Hapus data ini?')) return;
+                    loading.value = true;
+                    try {
+                        const table = getTableForRoute();
+                        const idField = getTableIdField();
+                        await supabaseClient.from(table).delete().eq(idField, id);
+                        
+                        const { data } = await supabaseClient.from(table).select('*');
+                        db.value[currentRoute.value] = data;
+                        showToast('Terhapus');
+                    } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; }
+                };
+
+                const addToCart = (b, type) => {
+                    let cart = type === 'pos' ? pos.value : beli.value;
+                    let ex = cart.items.find(i => i.Kode === b.Kode);
+                    if(ex) {
+                        let multiplier = (type === 'pos' && ex.UOM === ex.SatuanBeli) ? (ex.Isi || 1) : 1;
+                        if(type==='pos' && (ex.Qty + 1)*multiplier > (b.StokBagus || 0)) { showToast('Stok tidak cukup!', 'error'); return; }
+                        ex.Qty++;
+                    } else {
+                        if(type==='pos' && (b.StokBagus || 0) <= 0) { showToast('Stok habis!', 'error'); return; }
+                        cart.items.push({...b, Qty: 1, UOM: b.SatuanJual}); 
+                    }
+                    if(type === 'pos') posSearch.value = ''; else beliSearch.value = '';
+                };
+
+                const updateCartQty = (idx, step, type) => {
+                    let cart = type === 'pos' ? pos.value : beli.value;
+                    let item = cart.items[idx];
+                    let realStock = ((db.value.barang||[]).find(b => b.Kode === item.Kode) || {}).StokBagus || 0;
+                    
+                    let multiplier = (type === 'pos' && item.UOM === item.SatuanBeli) ? (item.Isi || 1) : 1;
+                    let requestedQty = (item.Qty + step) * multiplier;
+
+                    if(type === 'pos' && step > 0 && requestedQty > realStock) { showToast('Stok tidak cukup', 'error'); return; }
+                    item.Qty += step;
+                    if(item.Qty < 1) item.Qty = 1;
+                };
+
+                const openPaymentModal = (type) => { paymentModal.value = { show: true, type: type, total: type === 'pos' ? posTotal.value : beliTotal.value, bayar: type === 'pos' ? posTotal.value : 0 }; };
+
+                const processTransaction = async () => {
+                    loading.value = true;
+                    try {
+                        let type = paymentModal.value.type;
+                        let cart = type === 'pos' ? pos.value : beli.value;
+                        let total = paymentModal.value.total;
+                        let bayar = paymentModal.value.bayar;
+                        let kembali = bayar - total;
+                        let table = type === 'pos' ? 'Penjualan' : 'Pembelian';
+                        
+                        let trxId = cart.editingId || await generateId(table, type === 'pos' ? 'TRX-' : 'IN-', 6);
+                        const isoDate = cart.tanggal + 'T' + new Date().toTimeString().split(' ')[0];
+
+                        if (cart.editingId) {
+                            const { data: oldTrx } = await supabaseClient.from(table).select('ItemsJSON').eq('ID', trxId).single();
+                            if(oldTrx) {
+                                let oldItems = oldTrx.ItemsJSON;
+                                for(let oi of oldItems) {
+                                    let b = db.value.barang.find(x => x.Kode === oi.Kode);
+                                    if(b) {
+                                        let qtyRev = type === 'pos' ? (oi.UOM === oi.SatuanBeli ? (oi.Qty * oi.Isi) : oi.Qty) : (oi.Qty * oi.Isi);
+                                        let newVal = type === 'pos' ? (b.StokBagus + qtyRev) : (b.StokBagus - qtyRev);
+                                        await supabaseClient.from('Barang').update({ StokBagus: newVal }).eq('Kode', oi.Kode);
+                                    }
+                                }
+                            }
+                            await supabaseClient.from(table).delete().eq('ID', trxId);
+                        }
+
+                        let laba = 0;
+                        for(let item of cart.items) {
+                            let b = db.value.barang.find(x => x.Kode === item.Kode);
+                            if(b) {
+                                let hargaJualReal = item.UOM === item.SatuanBeli ? (item.HargaJualGrosir || (item.HargaJual * item.Isi)) : item.HargaJual;
+                                let modalReal = item.UOM === item.SatuanBeli ? item.HargaBeli : (item.HargaBeli / (item.Isi || 1));
+                                laba += (hargaJualReal - modalReal) * item.Qty;
+                                
+                                let qtyMod = type === 'pos' ? (item.UOM === item.SatuanBeli ? (item.Qty * item.Isi) : item.Qty) : (item.Qty * item.Isi);
+                                let newVal = type === 'pos' ? (b.StokBagus - qtyMod) : (b.StokBagus + qtyMod);
+                                
+                                let updateData = { StokBagus: newVal };
+                                if(type === 'pembelian') updateData.HargaBeli = item.HargaBeli;
+                                
+                                await supabaseClient.from('Barang').update(updateData).eq('Kode', item.Kode);
+                            }
+                        }
+
+                        let payload = {
+                            ID: trxId, Tanggal: isoDate, Total: total, Bayar: bayar, 
+                            Kembali: kembali >= 0 ? kembali : 0, 
+                            Status: bayar >= total ? 'Lunas' : (type === 'pos' ? 'Piutang' : 'Hutang'),
+                            ItemsJSON: cart.items
+                        };
+                        if(type === 'pos') { payload.Pelanggan = cart.pelanggan || 'Umum (Cash)'; payload.Laba = laba; } 
+                        else payload.Supplier = cart.supplier || 'Umum';
+
+                        await supabaseClient.from(table).insert([payload]);
+
+                        const { data: newTrxData } = await supabaseClient.from(table).select('*');
+                        const { data: newBrgData } = await supabaseClient.from('Barang').select('*');
+                        db.value[type === 'pos' ? 'penjualan' : 'pembelian'] = newTrxData;
+                        db.value.barang = newBrgData;
+                        
+                        showToast('Berhasil disimpan!');
+                        const justSaved = newTrxData.find(t => t.ID === trxId);
+                        if(justSaved) printTransaction(justSaved, 'struk', type === 'pos' ? 'Penjualan' : 'Pembelian');
+                        
+                        cancelEdit(type); paymentModal.value.show = false;
+                    } catch(e) { showToast('Gagal: ' + e.message, 'error'); console.error(e); } finally { loading.value = false; }
+                };
+
+                const editTransaksi = (t, type) => {
+                    let items = typeof t.ItemsJSON === 'string' ? JSON.parse(t.ItemsJSON) : t.ItemsJSON;
+                    if(type === 'pos') pos.value = { editingId: t.ID, tanggal: String(t.Tanggal||'').split('T')[0], pelanggan: t.Pelanggan, items: items };
+                    else beli.value = { editingId: t.ID, tanggal: String(t.Tanggal||'').split('T')[0], supplier: t.Supplier, items: items };
+                    currentRoute.value = type; showToast('Memasuki mode edit. Silakan simpan ulang.');
+                };
+                
+                const cancelEdit = (type) => { if(type === 'pos') pos.value = { editingId: null, tanggal: todayDate.value, pelanggan: '', items: [] }; else beli.value = { editingId: null, tanggal: todayDate.value, supplier: '', items: [] }; };
+                
+                const hapusTransaksi = async (id, type) => {
+                    if(!confirm('Hapus transaksi ini? Stok barang akan otomatis dikembalikan.')) return;
+                    loading.value = true;
+                    try {
+                        let table = type === 'pos' ? 'Penjualan' : 'Pembelian';
+                        const { data: oldTrx } = await supabaseClient.from(table).select('ItemsJSON').eq('ID', id).single();
+                        if(oldTrx) {
+                            let oldItems = oldTrx.ItemsJSON;
+                            for(let oi of oldItems) {
+                                let b = db.value.barang.find(x => x.Kode === oi.Kode);
+                                if(b) {
+                                    let qtyRev = type === 'pos' ? (oi.UOM === oi.SatuanBeli ? (oi.Qty * oi.Isi) : oi.Qty) : (oi.Qty * oi.Isi);
+                                    let newVal = type === 'pos' ? (b.StokBagus + qtyRev) : (b.StokBagus - qtyRev);
+                                    await supabaseClient.from('Barang').update({ StokBagus: newVal }).eq('Kode', oi.Kode);
+                                }
+                            }
+                        }
+                        await supabaseClient.from(table).delete().eq('ID', id);
+
+                        const [tData, bData] = await Promise.all([supabaseClient.from(table).select('*'), supabaseClient.from('Barang').select('*')]);
+                        db.value[type === 'pos' ? 'penjualan' : 'pembelian'] = tData.data;
+                        db.value.barang = bData.data; showToast('Transaksi dihapus');
+                    } catch(e) { showToast('Gagal Hapus', 'error'); } finally { loading.value = false; }
+                };
+
+                const submitBarangRusak = async () => {
+                    if(!barangRusakForm.value.KodeBarang || !barangRusakForm.value.Qty) return showToast('Lengkapi form', 'error');
+                    let b = (db.value.barang||[]).find(x => x.Kode === barangRusakForm.value.KodeBarang);
+                    if(barangRusakForm.value.Qty > (b.StokBagus||0)) return showToast('Qty melebihi stok bagus!', 'error');
+                    
+                    loading.value = true;
+                    try {
+                        barangRusakForm.value.NamaBarang = b.Nama;
+                        barangRusakForm.value.Tanggal = new Date().toISOString();
+                        
+                        await supabaseClient.from('Barang').update({ StokBagus: b.StokBagus - barangRusakForm.value.Qty, StokRusak: b.StokRusak + barangRusakForm.value.Qty }).eq('Kode', b.Kode);
+                        await supabaseClient.from('BarangRusak').insert([barangRusakForm.value]);
+                        
+                        const [brg, rusak] = await Promise.all([supabaseClient.from('Barang').select('*'), supabaseClient.from('BarangRusak').select('*')]);
+                        db.value.barang = brg.data; db.value.barangRusak = rusak.data;
+                        
+                        modal.value.show = false; showToast('Tercatat!');
+                    } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; }
+                };
+
+                const submitBayarHutang = async () => {
+                    if(!formHutang.value.id || formHutang.value.jumlah <= 0) return showToast('Isi Trx dan Nominal', 'error');
+                    loading.value = true; let t = listHutang.value.find(x => x.ID === formHutang.value.id);
+                    try {
+                        let isoDate = formHutang.value.tanggal + 'T00:00:00.000Z';
+                        await supabaseClient.from('PembayaranHutang').insert([{ ID_Trx: t.ID, Supplier: t.Supplier, JumlahBayar: formHutang.value.jumlah, Keterangan: 'Cicilan Pembayaran', Tanggal: isoDate }]);
+                        
+                        let currentBayar = Number(t.Bayar) + Number(formHutang.value.jumlah);
+                        let total = Number(t.Total); let kembali = currentBayar - total;
+                        await supabaseClient.from('Pembelian').update({ Bayar: currentBayar, Kembali: kembali >= 0 ? kembali : 0, Status: currentBayar >= total ? 'Lunas' : 'Hutang' }).eq('ID', t.ID);
+
+                        const [belData, hutData] = await Promise.all([supabaseClient.from('Pembelian').select('*'), supabaseClient.from('PembayaranHutang').select('*')]);
+                        db.value.pembelian = belData.data; db.value.pembayaranHutang = hutData.data;
+                        showToast('Cicilan berhasil!'); formHutang.value.jumlah = 0; formHutang.value.id = '';
+                    } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; }
+                };
+
+                const submitBayarPiutang = async () => {
+                    if(!formPiutang.value.id || formPiutang.value.jumlah <= 0) return showToast('Isi Trx dan Nominal', 'error');
+                    loading.value = true; let t = listPiutang.value.find(x => x.ID === formPiutang.value.id);
+                    try {
+                        let isoDate = formPiutang.value.tanggal + 'T00:00:00.000Z';
+                        await supabaseClient.from('PembayaranPiutang').insert([{ ID_Trx: t.ID, Pelanggan: t.Pelanggan, JumlahBayar: formPiutang.value.jumlah, Keterangan: 'Cicilan Pembayaran', Tanggal: isoDate }]);
+                        
+                        let currentBayar = Number(t.Bayar) + Number(formPiutang.value.jumlah);
+                        let total = Number(t.Total); let kembali = currentBayar - total;
+                        await supabaseClient.from('Penjualan').update({ Bayar: currentBayar, Kembali: kembali >= 0 ? kembali : 0, Status: currentBayar >= total ? 'Lunas' : 'Piutang' }).eq('ID', t.ID);
+
+                        const [jualData, piuData] = await Promise.all([supabaseClient.from('Penjualan').select('*'), supabaseClient.from('PembayaranPiutang').select('*')]);
+                        db.value.penjualan = jualData.data; db.value.pembayaranPiutang = piuData.data;
+                        showToast('Cicilan berhasil!'); formPiutang.value.jumlah = 0; formPiutang.value.id = '';
+                    } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; }
+                };
+
+                const saveSettings = async () => { 
+                    loading.value = true; 
+                    try { 
+                        // Simpan Setting String & Text Biasa
+                        for(let k of Object.keys(settingsForm.value)) {
+                            await supabaseClient.from('Pengaturan').upsert({ Key: k, Value: settingsForm.value[k] });
+                        }
+                        
+                        // Simpan Permission Role JSON
+                        await supabaseClient.from('Pengaturan').upsert({ Key: 'RolePermissions', Value: JSON.stringify(rolePermissions.value) });
+                        
+                        const { data } = await supabaseClient.from('Pengaturan').select('*');
+                        db.value.pengaturan = data;
+                        showToast('Tersimpan & Diperbarui'); 
+                    } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; } 
+                };
+
+                const openRoleModal = (idx) => {
+                    if(idx === -1) roleModal.value = { show: true, index: -1, role: '', perms: [] };
+                    else roleModal.value = { show: true, index: idx, role: rolePermissions.value[idx].role, perms: [...rolePermissions.value[idx].perms] };
+                };
+
+                const saveRole = () => {
+                    if(!roleModal.value.role) return showToast('Nama level harus diisi!', 'error');
+                    let r = [...rolePermissions.value];
+                    if(roleModal.value.index === -1) r.push({ role: roleModal.value.role, perms: roleModal.value.perms });
+                    else { r[roleModal.value.index].role = roleModal.value.role; r[roleModal.value.index].perms = roleModal.value.perms; }
+                    rolePermissions.value = r; roleModal.value.show = false; showToast('Level ditambahkan secara lokal. Klik "Simpan Pengaturan" untuk menyimpannya permanen ke database.');
+                };
+
+                const deleteRole = () => {
+                    if(roleModal.value.role === 'Admin') return showToast('Role Admin tidak bisa dihapus!', 'error');
+                    rolePermissions.value.splice(roleModal.value.index, 1);
+                    roleModal.value.show = false; showToast('Terhapus sementara. Klik "Simpan Pengaturan" untuk mempermanenkan penghapusan.');
+                };
+
+                const printTransaction = (trx, mode, type = 'Penjualan') => {
+                    printMode.value = mode; let items = typeof trx.ItemsJSON === 'string' ? JSON.parse(trx.ItemsJSON) : trx.ItemsJSON;
+                    let total = Number(trx.Total) || 0; let bayar = Number(trx.Bayar) || 0; let sisa = bayar < total ? total - bayar : 0;
+                    printData.value = { id: trx.ID, tanggal: formatTgl(trx.Tanggal), items: items, total: total, bayar: bayar, kembali: trx.Kembali, sisa: sisa, kontak: trx.Pelanggan || trx.Supplier || 'Umum', tipe: type };
+                    setTimeout(() => window.print(), 500);
+                };
+
+                const printPayment = (row, type) => {
+                    printMode.value = 'struk_bayar';
+                    printData.value = { id: row.ID_Trx, tanggal: formatTgl(row.Tanggal), kontak: row.Pelanggan || row.Supplier, jumlah: row.JumlahBayar, keterangan: row.Keterangan, tipe: type === 'bayar_hutang' ? 'Hutang' : 'Piutang' };
+                    setTimeout(() => window.print(), 500);
+                };
+
+                const printReport = () => { printMode.value = 'laporan'; printHTMLContent.value = document.querySelector('.overflow-x-auto').innerHTML; setTimeout(() => window.print(), 500); };
+                onMounted(() => { loadInitialData(); });
+
+                return {
+                    loading, isLoggedIn, currentUser, loginForm, isAdmin, hasAccess, doLogin, doLogout, sidebarOpen, currentRoute, routeTitle, todayDate, toast, db, tableSearch, posSearch, beliSearch, pos, beli, barangRusakForm,
+                    formHutang, formPiutang, listHutang, listPiutang, reportType, reportFilterDate, reportFilterSupplier, reportFilterPelanggan, modal, formData, paymentModal, settingsForm, formFields, tableColumns, filteredTableData,
+                    filteredPosBarang, filteredBeliBarang, posTotal, beliTotal, dashboardStats, pelangganPiutangTotal, filteredReports, reportDynamicColumns, reportTotals, printMode, printData, printHTMLContent,
+                    rolePermissions, roleModal, availablePermissions, openRoleModal, saveRole, deleteRole,
+                    formatRp, formatTgl, getSetting, openModal, submitForm, deleteData, addToCart, updateCartQty, openPaymentModal, processTransaction, cancelEdit, editTransaksi, hapusTransaksi, submitBarangRusak, submitBayarHutang, submitBayarPiutang, saveSettings, printTransaction, printPayment, printReport
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
+```
