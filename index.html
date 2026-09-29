@@ -35,7 +35,7 @@
     <div id="app" class="flex h-screen overflow-hidden">
         
         <!-- Loader -->
-        <div v-if="loading" class="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+        <div v-if="loading" class="fixed inset-0 bg-white backdrop-blur-sm z-50 flex flex-col items-center justify-center">
             <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600"></div>
             <p class="mt-4 text-slate-600 font-medium">Berkomunikasi dengan Supabase...</p>
         </div>
@@ -64,6 +64,7 @@
         <template v-if="isLoggedIn && !loading">
             <!-- AREA CETAK STRUK & A4 -->
             <div id="print-area" class="hidden print:block bg-white text-black z-50">
+                
                 <!-- Struk 58mm Kasir & Pembelian -->
                 <div v-if="printMode === 'struk' && printData" class="print-58mm p-2">
                     <div class="text-center font-bold text-lg">{{ getSetting('NamaToko') }}</div>
@@ -173,7 +174,6 @@
             </div>
             <!-- AKHIR AREA CETAK -->
 
-            <!-- Sidebar -->
             <div :class="`bg-slate-900 text-white w-64 flex-shrink-0 transition-transform duration-300 absolute md:relative z-40 h-full ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`">
                 <div class="p-4 flex items-center justify-between border-b border-slate-800">
                     <div class="font-bold text-xl tracking-wider text-blue-400">CREATIVE<span class="text-white">POS</span></div>
@@ -198,7 +198,6 @@
                 </nav>
             </div>
 
-            <!-- Konten Utama Kanan -->
             <div class="flex-1 flex flex-col w-full">
                 <!-- Header Atas -->
                 <header class="bg-white shadow-sm border-b px-4 lg:px-6 h-16 flex items-center justify-between z-10 flex-shrink-0">
@@ -260,7 +259,7 @@
                             <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
                                 <h3 class="font-bold text-slate-800 mb-4 text-rose-600">Peringatan Stok Menipis</h3>
                                 <div class="space-y-3 max-h-[300px] overflow-y-auto">
-                                    <div v-for="b in (db.barang || []).filter(x => (x.StokBagus||0) <= 5)" class="flex justify-between items-center pb-2 border-b">
+                                    <div v-for="b in (db.barang || []).filter(x => (x.StokBagus||0) <= 5).slice(0, 15)" class="flex justify-between items-center pb-2 border-b">
                                         <div>
                                             <p class="font-medium text-sm">{{ b.Nama }}</p>
                                             <p class="text-xs text-slate-500">{{ b.Kode }}</p>
@@ -278,17 +277,17 @@
                         <div class="w-full lg:w-7/12 flex flex-col bg-white rounded-xl shadow-sm border border-slate-100 p-4">
                             <div class="mb-4">
                                 <input type="text" v-model="posSearch" placeholder="Cari Nama/Kode Barang..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                <p class="text-xs text-slate-500 mt-1 italic" v-if="posSearch === ''">Menampilkan 10 barang terlaris...</p>
+                                <p class="text-xs text-slate-500 mt-1 italic" v-if="posSearch === ''">Ketik kode atau nama barang untuk menampilkan produk...</p>
                             </div>
                             <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
-                                <div v-for="b in filteredPosBarang" @click="addToCart(b, 'pos')" class="border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-md transition bg-slate-50 flex flex-col justify-between h-28 relative">
+                                <div v-for="b in filteredPosBarang" @click="addToCart(b, 'pos')" :class="`border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-md transition flex flex-col justify-between h-28 relative ${b.StokBagus <= 0 ? 'bg-slate-100 opacity-75' : 'bg-slate-50'}`">
                                     <div>
                                         <h4 class="font-semibold text-sm leading-tight text-slate-800">{{ b.Nama }}</h4>
                                         <p class="text-xs text-slate-500 mt-1">{{ b.Kode }}</p>
                                     </div>
                                     <div class="flex justify-between items-end mt-2">
                                         <span class="text-blue-600 font-bold text-sm">{{ formatRp(b.HargaJual) }}<span class="text-[10px] text-slate-500 font-normal"> /{{ b.SatuanJual||'Pcs' }}</span></span>
-                                        <span class="text-xs bg-slate-200 px-1.5 py-0.5 rounded font-medium">Sisa: {{ b.StokBagus || 0 }}</span>
+                                        <span :class="`text-xs px-1.5 py-0.5 rounded font-bold ${b.StokBagus <= 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'}`">Sisa: {{ b.StokBagus || 0 }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -354,14 +353,14 @@
                                 <input type="text" v-model="beliSearch" placeholder="Cari Nama/Kode Barang..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none">
                             </div>
                             <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
-                                <div v-for="b in filteredBeliBarang" @click="addToCart(b, 'beli')" class="border rounded-lg p-3 cursor-pointer hover:border-orange-500 hover:shadow-md transition bg-slate-50 flex flex-col justify-between h-28">
+                                <div v-for="b in filteredBeliBarang" @click="addToCart(b, 'beli')" :class="`border rounded-lg p-3 cursor-pointer hover:border-orange-500 hover:shadow-md transition flex flex-col justify-between h-28 ${b.StokBagus <= 0 ? 'bg-slate-100' : 'bg-slate-50'}`">
                                     <div>
                                         <h4 class="font-semibold text-sm leading-tight text-slate-800">{{ b.Nama }}</h4>
                                         <p class="text-[10px] bg-slate-200 inline-block px-1 rounded text-slate-600 mt-1">1 {{ b.SatuanBeli||'Dus' }} = {{ b.Isi||1 }} {{ b.SatuanJual||'Pcs' }}</p>
                                     </div>
                                     <div class="flex justify-between items-end mt-2">
                                         <span class="text-orange-600 font-bold text-sm">{{ formatRp(b.HargaBeli) }}</span>
-                                        <span class="text-xs bg-slate-200 px-1.5 py-0.5 rounded font-medium">Stok: {{ b.StokBagus || 0 }}</span>
+                                        <span :class="`text-xs px-1.5 py-0.5 rounded font-bold ${b.StokBagus <= 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'}`">Stok: {{ b.StokBagus || 0 }}</span>
                                     </div>
                                 </div>
                             </div>
@@ -416,12 +415,18 @@
                         </div>
                     </div>
 
-                    <!-- MENU: Data Master -->
+                    <!-- MENU: Data Master (Barang, Karyawan, Supplier, Pelanggan) -->
                     <div v-else-if="['barang', 'supplier', 'pelanggan', 'karyawan'].includes(currentRoute)" class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
                         <div class="p-4 border-b bg-slate-50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                            <div class="relative w-full sm:w-1/3">
-                                <input type="text" v-model="tableSearch" placeholder="Cari data..." class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm">
-                                <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
+                            <div class="relative w-full sm:w-1/3 flex flex-col space-y-2">
+                                <div class="relative">
+                                    <input type="text" v-model="tableSearch" placeholder="Cari data..." class="w-full pl-10 pr-4 py-2 border rounded-lg text-sm">
+                                    <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
+                                </div>
+                                <div v-if="currentRoute === 'barang'" class="flex items-center space-x-2 pl-1">
+                                    <input type="checkbox" id="showEmptyStock" v-model="showEmptyStockBarang" class="w-4 h-4 text-blue-600 rounded cursor-pointer">
+                                    <label for="showEmptyStock" class="text-xs text-slate-600 cursor-pointer font-medium">Tampilkan stok kosong</label>
+                                </div>
                             </div>
                             <div class="flex flex-wrap gap-2 justify-end">
                                 <input type="file" accept=".csv" @change="handleImportCSV" class="hidden" id="csvImportInput">
@@ -449,12 +454,9 @@
                                             <button @click="deleteData(row.Kode || row.ID)" class="text-red-500 hover:underline">Hapus</button>
                                         </td>
                                     </tr>
-                                    <tr v-if="filteredTableData.length === 0"><td :colspan="tableColumns.length + 1" class="p-4 text-center text-slate-500">Tidak ada data ditemukan.</td></tr>
+                                    <tr v-if="filteredTableData.length === 0"><td :colspan="tableColumns.length + 1" class="p-8 text-center text-slate-400 italic">Data tidak ditemukan.</td></tr>
                                 </tbody>
                             </table>
-                        </div>
-                        <div v-if="filteredTableData.length >= tableLimit" class="p-4 text-center border-t bg-slate-50">
-                            <button @click="tableLimit += 100" class="bg-blue-100 text-blue-700 hover:bg-blue-200 px-6 py-2 rounded-lg text-sm font-bold shadow-sm transition">Tampilkan Lebih Banyak ↓</button>
                         </div>
                     </div>
 
@@ -474,6 +476,10 @@
                                     <option v-if="hasAccess('lap_hutang')" value="hutang">Daftar Hutang ke Supplier</option>
                                     <option v-if="hasAccess('lap_hutang')" value="bayar_hutang">Riwayat Cicilan Hutang</option>
                                 </select>
+                                <div v-if="reportType === 'stok'" class="flex items-center space-x-2 mt-2 pl-1">
+                                    <input type="checkbox" id="showEmptyReport" v-model="showEmptyStockReport" class="w-4 h-4 text-blue-600 rounded cursor-pointer">
+                                    <label for="showEmptyReport" class="text-xs text-slate-600 cursor-pointer font-medium">Tampilkan stok kosong</label>
+                                </div>
                             </div>
                             <div>
                                 <label class="text-xs block mb-1">Filter Tanggal</label>
@@ -734,7 +740,7 @@
     </div>
 
     <script>
-        // === Konfigurasi Supabase Anda ===
+        // === Konfigurasi Supabase Anda (Terhubung Otomatis) ===
         const SUPABASE_URL = 'https://byxxgsxonadnezhzatkp.supabase.co';
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ5eHhnc3hvbmFkbmV6aHphdGtwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNjkwNzYsImV4cCI6MjEwNTk0NTA3Nn0.myF7SZhdQDztGbM9LpRWpwwOdurExhvS0sv-MaaQs5U';
         const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -753,6 +759,31 @@
                 const todayDate = ref(new Date().toLocaleDateString('en-CA'));
                 const toast = ref({ show: false, message: '', type: 'success' });
                 
+                // Helper Pagination untuk mengatasi limit 1000 baris bawaan Supabase
+                // Fungsi ini akan mengambil data per-1000 baris hingga seluruh 3000+ data terkumpul
+                const fetchAllData = async (table) => {
+                    let allData = [];
+                    let from = 0;
+                    const limit = 1000;
+                    let hasMore = true;
+                    
+                    while (hasMore) {
+                        const { data, error } = await supabaseClient.from(table).select('*').range(from, from + limit - 1);
+                        if (error) throw error;
+                        
+                        if (data && data.length > 0) {
+                            allData = allData.concat(data);
+                            from += limit;
+                        }
+                        
+                        // Jika data yang dikembalikan kurang dari limit, artinya ini halaman terakhir
+                        if (!data || data.length < limit) {
+                            hasMore = false;
+                        }
+                    }
+                    return { data: allData, error: null };
+                };
+
                 const db = ref({
                     barang: [], supplier: [], pelanggan: [], karyawan: [],
                     penjualan: [], pembelian: [], pengaturan: [],
@@ -760,9 +791,11 @@
                 });
 
                 const tableSearch = ref('');
-                const tableLimit = ref(100);
                 const posSearch = ref('');
                 const beliSearch = ref('');
+                
+                const showEmptyStockBarang = ref(false);
+                const showEmptyStockReport = ref(false);
 
                 const pos = ref({ tanggal: todayDate.value, pelanggan: '', items: [], editingId: null });
                 const beli = ref({ tanggal: todayDate.value, supplier: '', items: [], editingId: null });
@@ -778,7 +811,7 @@
                 const reportType = ref('penjualan');
                 const reportFilterDate = ref('');
                 const reportFilterSupplier = ref('');
-                const reportFilterPelanggan = ref(''); // Filter Piutang
+                const reportFilterPelanggan = ref('');
                 const printMode = ref(''); 
                 const printData = ref(null);
                 const printHTMLContent = ref('');
@@ -791,27 +824,18 @@
                 const closeDialog = () => { dialog.value.show = false; };
                 const confirmDialog = () => { if (dialog.value.onConfirm) dialog.value.onConfirm(); closeDialog(); };
 
-                // === FUNGSI PENARIK DATA JUMBO (Bypass Limit 1000 Supabase) ===
-                const fetchAllData = async (table) => {
-                    let all = []; let count = 0;
-                    while(true) {
-                        const res = await supabaseClient.from(table).select('*').range(count, count + 999);
-                        if(res.error) return { error: res.error, data: all };
-                        if(!res.data || res.data.length === 0) break;
-                        all.push(...res.data);
-                        if(res.data.length < 1000) break;
-                        count += 1000;
-                    }
-                    return { data: all };
-                };
-
-                // Mesin Sinkronisasi Latar Belakang (Realtime dengan Pengaman)
+                // Mesin Sinkronisasi Latar Belakang (Realtime)
                 const setupRealtime = () => {
-                    if (window.self !== window.top || window.origin === 'null' || window.location.protocol === 'blob:') {
-                        console.warn('Mode Pratinjau terdeteksi: Fitur Realtime (Auto-Refresh) dimatikan sementara.');
-                        return;
-                    }
                     try {
+                        // Cek apakah WebSocket diizinkan di lingkungan ini (menghindari SecurityError di Canvas)
+                        try {
+                            const testWs = new window.WebSocket('wss://echo.websocket.events');
+                            testWs.close();
+                        } catch (wsError) {
+                            console.warn("WebSocket tidak diizinkan di lingkungan ini. Fitur sinkronisasi Realtime dinonaktifkan.");
+                            return;
+                        }
+
                         supabaseClient
                             .channel('public-tables')
                             .on('postgres_changes', { event: '*', schema: 'public' }, (payload) => {
@@ -823,25 +847,21 @@
                                 };
                                 const stateKey = tableMap[payload.table];
                                 if (stateKey) {
-                                    if (payload.table === 'Barang') {
-                                        fetchAllData('Barang').then(({ data }) => { if(data) db.value.barang = data; });
-                                    } else {
-                                        supabaseClient.from(payload.table).select('*').then(({ data, error }) => {
-                                            if (!error && data) {
-                                                db.value[stateKey] = data;
-                                                if (payload.table === 'Pengaturan') {
-                                                    data.forEach(s => { if(s.Key !== 'RolePermissions') settingsForm.value[s.Key] = s.Value; });
-                                                    const roleSet = data.find(s => s.Key === 'RolePermissions');
-                                                    if (roleSet && roleSet.Value) { try { rolePermissions.value = JSON.parse(roleSet.Value); } catch(e) {} }
-                                                }
+                                    fetchAllData(payload.table).then(({ data, error }) => {
+                                        if (!error && data) {
+                                            db.value[stateKey] = data;
+                                            if (payload.table === 'Pengaturan') {
+                                                data.forEach(s => { if(s.Key !== 'RolePermissions') settingsForm.value[s.Key] = s.Value; });
+                                                const roleSet = data.find(s => s.Key === 'RolePermissions');
+                                                if (roleSet && roleSet.Value) { try { rolePermissions.value = JSON.parse(roleSet.Value); } catch(e) {} }
                                             }
-                                        });
-                                    }
+                                        }
+                                    });
                                 }
-                            }).subscribe((status, err) => {
-                                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') console.warn('Realtime dinonaktifkan sementara.');
-                            });
-                    } catch (e) { console.log('Realtime dilewati pada mode pratinjau.'); }
+                            }).subscribe();
+                    } catch (e) {
+                        console.warn("Gagal mengaktifkan sinkronisasi Realtime:", e);
+                    }
                 };
 
                 // DEFINISI MENU / ROLE SYSTEM
@@ -868,7 +888,7 @@
 
                 const hasAccess = (permId) => {
                     if(!currentUser.value) return false;
-                    if(currentUser.value.Jabatan === 'Owner' || currentUser.value.Jabatan === 'Admin') return true; 
+                    if(currentUser.value.Jabatan === 'Owner') return true; 
                     const role = rolePermissions.value.find(r => r.role === currentUser.value.Jabatan);
                     if(!role) return false;
                     return role.perms.includes(permId);
@@ -896,12 +916,11 @@
                     try {
                         loading.value = true;
                         const responses = await Promise.all([
-                            fetchAllData('Barang'), 
-                            supabaseClient.from('Supplier').select('*'),
-                            supabaseClient.from('Pelanggan').select('*'), supabaseClient.from('Karyawan').select('*'),
-                            supabaseClient.from('Penjualan').select('*'), supabaseClient.from('Pembelian').select('*'),
-                            supabaseClient.from('BarangRusak').select('*'), supabaseClient.from('PembayaranHutang').select('*'),
-                            supabaseClient.from('PembayaranPiutang').select('*'), supabaseClient.from('Pengaturan').select('*')
+                            fetchAllData('Barang'), fetchAllData('Supplier'),
+                            fetchAllData('Pelanggan'), fetchAllData('Karyawan'),
+                            fetchAllData('Penjualan'), fetchAllData('Pembelian'),
+                            fetchAllData('BarangRusak'), fetchAllData('PembayaranHutang'),
+                            fetchAllData('PembayaranPiutang'), fetchAllData('Pengaturan')
                         ]);
                         
                         let pesanError = '';
@@ -990,7 +1009,13 @@
                     return dbList.slice(0, 10);
                 };
 
-                const filteredPosBarang = computed(() => getTopItems(posSearch.value, db.value.barang));
+                const filteredPosBarang = computed(() => {
+                    if (posSearch.value.trim() === '') return [];
+                    const q = posSearch.value.toLowerCase();
+                    return (db.value.barang || []).filter(b => 
+                        b.Nama.toLowerCase().includes(q) || b.Kode.toLowerCase().includes(q)
+                    );
+                });
                 const filteredBeliBarang = computed(() => getTopItems(beliSearch.value, db.value.barang));
 
                 const formFields = computed(() => {
@@ -1022,16 +1047,19 @@
                 });
 
                 const filteredTableData = computed(() => {
-                    const data = db.value[currentRoute.value] || [];
-                    let result = data;
+                    let data = db.value[currentRoute.value] || [];
+                    
+                    if (currentRoute.value === 'barang' && !showEmptyStockBarang.value) {
+                        data = data.filter(r => (Number(r.StokBagus) || 0) > 0);
+                    }
+                    
+                    let filtered = data;
                     if(tableSearch.value) {
                         const q = tableSearch.value.toLowerCase();
-                        result = data.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+                        filtered = data.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
                     }
-                    return result.slice(0, tableLimit.value); 
+                    return filtered;
                 });
-
-                watch([currentRoute, tableSearch], () => { tableLimit.value = 100; });
 
                 const posTotal = computed(() => pos.value.items.reduce((sum, item) => sum + ((item.UOM === item.SatuanBeli ? (item.HargaJualGrosir || (item.HargaJual * item.Isi)) : item.HargaJual) * item.Qty), 0));
                 const beliTotal = computed(() => beli.value.items.reduce((sum, item) => sum + (item.HargaBeli * item.Qty), 0));
@@ -1042,7 +1070,12 @@
                 const filteredReports = computed(() => {
                     let d = db.value[reportType.value === 'labarugi' ? 'penjualan' : (reportType.value === 'stok' ? 'barang' : (reportType.value === 'piutang' ? 'penjualan' : (reportType.value === 'hutang' ? 'pembelian' : (reportType.value === 'barangrusak' ? 'barangRusak' : (reportType.value === 'bayar_hutang' ? 'pembayaranHutang' : (reportType.value === 'bayar_piutang' ? 'pembayaranPiutang' : reportType.value))))))] || [];
                     
-                    if(reportType.value === 'stok') d = d.map(x => ({ ...x, TotalAset: ((Number(x.StokBagus)||0) / (Number(x.Isi)||1)) * (Number(x.HargaBeli)||0) }));
+                    if(reportType.value === 'stok') {
+                        d = d.map(x => ({ ...x, TotalAset: ((Number(x.StokBagus)||0) / (Number(x.Isi)||1)) * (Number(x.HargaBeli)||0) }));
+                        if (!showEmptyStockReport.value) {
+                            d = d.filter(x => (Number(x.StokBagus) || 0) > 0);
+                        }
+                    }
                     
                     if(reportType.value === 'piutang') {
                         d = d.filter(x => x.Status !== 'Lunas').map(x => ({ ...x, SisaPiutang: (Number(x.Total)||0) - (Number(x.Bayar)||0) }));
@@ -1086,7 +1119,6 @@
                     } return {};
                 });
 
-                // === FITUR EKSPOR & IMPOR CSV === //
                 const exportCSV = () => {
                     const headers = ['Kode', 'Nama', 'SatuanBeli', 'SatuanJual', 'Isi', 'HargaBeli', 'HargaJualGrosir', 'HargaJual', 'StokBagus', 'StokRusak'];
                     let csvContent = headers.join(',') + '\n';
@@ -1165,7 +1197,7 @@
                         try {
                             let lastId = 0;
                             const { data: dbData } = await supabaseClient.from('Barang').select('Kode').order('Kode', { ascending: false }).limit(1);
-                            if (dbData && dbData.length > 0) {
+                            if (dbData && dbData.length > 0 && dbData[0].Kode) {
                                 const match = String(dbData[0].Kode).match(/\d+/);
                                 if(match) lastId = parseInt(match[0]);
                             }
@@ -1180,7 +1212,7 @@
                             const { error } = await supabaseClient.from('Barang').upsert(itemsToUpsert, { onConflict: 'Kode' });
                             if(error) throw new Error(error.message);
                             
-                            const { data } = await supabaseClient.from('Barang').select('*');
+                            const { data } = await fetchAllData('Barang');
                             db.value.barang = data;
                             showToast(`Berhasil Impor ${itemsToUpsert.length} Data Barang!`);
                         } catch(err) {
@@ -1294,7 +1326,7 @@
                         if (isEdit) await supabaseClient.from(table).update(dataToSave).eq(idField, dataToSave[idField]);
                         else await supabaseClient.from(table).insert([dataToSave]);
 
-                        const { data } = await supabaseClient.from(table).select('*');
+                        const { data } = await fetchAllData(table);
                         db.value[currentRoute.value] = data;
                         
                         modal.value.show = false; showToast('Berhasil disimpan');
@@ -1309,7 +1341,7 @@
                             const idField = getTableIdField();
                             await supabaseClient.from(table).delete().eq(idField, id);
                             
-                            const { data } = await supabaseClient.from(table).select('*');
+                            const { data } = await fetchAllData(table);
                             db.value[currentRoute.value] = data;
                             showToast('Data Terhapus');
                         } catch(e) { showToast('Gagal Hapus', 'error'); } finally { loading.value = false; }
@@ -1403,8 +1435,8 @@
 
                         await supabaseClient.from(table).insert([payload]);
 
-                        const { data: newTrxData } = await supabaseClient.from(table).select('*');
-                        const { data: newBrgData } = await supabaseClient.from('Barang').select('*');
+                        const { data: newTrxData } = await fetchAllData(table);
+                        const { data: newBrgData } = await fetchAllData('Barang');
                         db.value[type === 'pos' ? 'penjualan' : 'pembelian'] = newTrxData;
                         db.value.barang = newBrgData;
                         
@@ -1444,10 +1476,9 @@
                             }
                             await supabaseClient.from(table).delete().eq('ID', id);
 
-                            const [tData, bData] = await Promise.all([supabaseClient.from(table).select('*'), supabaseClient.from('Barang').select('*')]);
+                            const [tData, bData] = await Promise.all([fetchAllData(table), fetchAllData('Barang')]);
                             db.value[type === 'pos' ? 'penjualan' : 'pembelian'] = tData.data;
-                            db.value.barang = bData.data; 
-                            showToast('Transaksi dibatalkan & dihapus');
+                            db.value.barang = bData.data; showToast('Transaksi dibatalkan & dihapus');
                         } catch(e) { showToast('Gagal Hapus', 'error'); } finally { loading.value = false; }
                     });
                 };
@@ -1465,7 +1496,7 @@
                         await supabaseClient.from('Barang').update({ StokBagus: b.StokBagus - barangRusakForm.value.Qty, StokRusak: b.StokRusak + barangRusakForm.value.Qty }).eq('Kode', b.Kode);
                         await supabaseClient.from('BarangRusak').insert([barangRusakForm.value]);
                         
-                        const [brg, rusak] = await Promise.all([supabaseClient.from('Barang').select('*'), supabaseClient.from('BarangRusak').select('*')]);
+                        const [brg, rusak] = await Promise.all([fetchAllData('Barang'), fetchAllData('BarangRusak')]);
                         db.value.barang = brg.data; db.value.barangRusak = rusak.data;
                         
                         modal.value.show = false; showToast('Tercatat!');
@@ -1483,7 +1514,7 @@
                         let total = Number(t.Total); let kembali = currentBayar - total;
                         await supabaseClient.from('Pembelian').update({ Bayar: currentBayar, Kembali: kembali >= 0 ? kembali : 0, Status: currentBayar >= total ? 'Lunas' : 'Hutang' }).eq('ID', t.ID);
 
-                        const [belData, hutData] = await Promise.all([supabaseClient.from('Pembelian').select('*'), supabaseClient.from('PembayaranHutang').select('*')]);
+                        const [belData, hutData] = await Promise.all([fetchAllData('Pembelian'), fetchAllData('PembayaranHutang')]);
                         db.value.pembelian = belData.data; db.value.pembayaranHutang = hutData.data;
                         showToast('Cicilan berhasil!'); formHutang.value.jumlah = 0; formHutang.value.id = '';
                     } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; }
@@ -1500,7 +1531,7 @@
                         let total = Number(t.Total); let kembali = currentBayar - total;
                         await supabaseClient.from('Penjualan').update({ Bayar: currentBayar, Kembali: kembali >= 0 ? kembali : 0, Status: currentBayar >= total ? 'Lunas' : 'Piutang' }).eq('ID', t.ID);
 
-                        const [jualData, piuData] = await Promise.all([supabaseClient.from('Penjualan').select('*'), supabaseClient.from('PembayaranPiutang').select('*')]);
+                        const [jualData, piuData] = await Promise.all([fetchAllData('Penjualan'), fetchAllData('PembayaranPiutang')]);
                         db.value.penjualan = jualData.data; db.value.pembayaranPiutang = piuData.data;
                         showToast('Cicilan berhasil!'); formPiutang.value.jumlah = 0; formPiutang.value.id = '';
                     } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; }
@@ -1515,7 +1546,7 @@
                         
                         await supabaseClient.from('Pengaturan').upsert({ Key: 'RolePermissions', Value: JSON.stringify(rolePermissions.value) });
                         
-                        const { data } = await supabaseClient.from('Pengaturan').select('*');
+                        const { data } = await fetchAllData('Pengaturan');
                         db.value.pengaturan = data;
                         showToast('Tersimpan & Diperbarui'); 
                     } catch(e) { showToast('Gagal', 'error'); } finally { loading.value = false; } 
@@ -1561,7 +1592,8 @@
                 });
 
                 return {
-                    loading, isLoggedIn, currentUser, loginForm, isAdmin, hasAccess, doLogin, doLogout, sidebarOpen, currentRoute, routeTitle, todayDate, toast, db, tableSearch, tableLimit, posSearch, beliSearch, pos, beli, barangRusakForm, barangRusakSearch,
+                    loading, isLoggedIn, currentUser, loginForm, isAdmin, hasAccess, doLogin, doLogout, sidebarOpen, currentRoute, routeTitle, todayDate, toast, db, tableSearch, posSearch, beliSearch, pos, beli, barangRusakForm, barangRusakSearch,
+                    showEmptyStockBarang, showEmptyStockReport,
                     formHutang, formPiutang, listHutang, listPiutang, reportType, reportFilterDate, reportFilterSupplier, reportFilterPelanggan, modal, formData, paymentModal, settingsForm, formFields, tableColumns, filteredTableData,
                     filteredPosBarang, filteredBeliBarang, posTotal, beliTotal, dashboardStats, filteredBarangRusakList, pelangganPiutangTotal, filteredReports, reportDynamicColumns, reportTotals, printMode, printData, printHTMLContent,
                     rolePermissions, roleModal, availablePermissions, openRoleModal, saveRole, deleteRole, exportCSV, handleImportCSV,
