@@ -71,7 +71,10 @@
                     <div class="text-center text-xs mb-2">{{ getSetting('Alamat') }} | {{ getSetting('NoTelp') }}</div>
                     <div class="border-b mb-2 border-black border-dashed"></div>
                     <div class="text-center font-bold text-sm mb-2" v-if="printData.tipe === 'Pembelian'">STRUK PEMBELIAN</div>
-                    <div class="text-xs mb-1">Tgl: {{ printData.tanggal }}</div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Tgl: {{ printData.tanggal }} {{ printData.waktu }}</span>
+                        <span>Kasir: {{ printData.kasir }}</span>
+                    </div>
                     <div class="text-xs mb-2">No: {{ printData.id }}</div>
                     <div class="text-xs mb-2">{{ printData.tipe === 'Pembelian' ? 'Supplier' : 'Plg' }}: {{ printData.kontak }}</div>
                     <div class="border-b mb-2 border-black border-dashed"></div>
@@ -100,7 +103,10 @@
                     <div class="text-center text-xs mb-2">{{ getSetting('Alamat') }}</div>
                     <div class="border-b mb-2 border-black border-dashed"></div>
                     <div class="text-center font-bold text-sm mb-2">BUKTI BAYAR CICILAN {{ printData.tipe.toUpperCase() }}</div>
-                    <div class="text-xs mb-1">Tgl: {{ printData.tanggal }}</div>
+                    <div class="flex justify-between text-xs mb-1">
+                        <span>Tgl: {{ printData.tanggal }} {{ printData.waktu }}</span>
+                        <span>Kasir: {{ printData.kasir }}</span>
+                    </div>
                     <div class="text-xs mb-1">Ref: {{ printData.id }}</div>
                     <div class="text-xs mb-2">{{ printData.tipe === 'Hutang' ? 'Supplier' : 'Klien' }}: {{ printData.kontak }}</div>
                     <div class="border-b mb-2 border-black border-dashed"></div>
@@ -1532,7 +1538,7 @@
                     if(!formHutang.value.id || formHutang.value.jumlah <= 0) return showToast('Isi Trx dan Nominal', 'error');
                     loading.value = true; let t = listHutang.value.find(x => x.ID === formHutang.value.id);
                     try {
-                        let isoDate = formHutang.value.tanggal + 'T00:00:00.000Z';
+                        let isoDate = formHutang.value.tanggal + 'T' + new Date().toTimeString().split(' ')[0];
                         await supabaseClient.from('PembayaranHutang').insert([{ ID_Trx: t.ID, Supplier: t.Supplier, JumlahBayar: formHutang.value.jumlah, Keterangan: 'Cicilan Pembayaran', Tanggal: isoDate }]);
                         
                         let currentBayar = Number(t.Bayar) + Number(formHutang.value.jumlah);
@@ -1549,7 +1555,7 @@
                     if(!formPiutang.value.id || formPiutang.value.jumlah <= 0) return showToast('Isi Trx dan Nominal', 'error');
                     loading.value = true; let t = listPiutang.value.find(x => x.ID === formPiutang.value.id);
                     try {
-                        let isoDate = formPiutang.value.tanggal + 'T00:00:00.000Z';
+                        let isoDate = formPiutang.value.tanggal + 'T' + new Date().toTimeString().split(' ')[0];
                         await supabaseClient.from('PembayaranPiutang').insert([{ ID_Trx: t.ID, Pelanggan: t.Pelanggan, JumlahBayar: formPiutang.value.jumlah, Keterangan: 'Cicilan Pembayaran', Tanggal: isoDate }]);
                         
                         let currentBayar = Number(t.Bayar) + Number(formPiutang.value.jumlah);
@@ -1599,13 +1605,16 @@
                 const printTransaction = (trx, mode, type = 'Penjualan') => {
                     printMode.value = mode; let items = typeof trx.ItemsJSON === 'string' ? JSON.parse(trx.ItemsJSON) : trx.ItemsJSON;
                     let total = Number(trx.Total) || 0; let bayar = Number(trx.Bayar) || 0; let sisa = bayar < total ? total - bayar : 0;
-                    printData.value = { id: trx.ID, tanggal: formatTgl(trx.Tanggal), items: items, total: total, bayar: bayar, kembali: trx.Kembali, sisa: sisa, kontak: trx.Pelanggan || trx.Supplier || 'Umum', tipe: type };
+                    
+                    let waktu = ''; try { waktu = trx.Tanggal.includes('T') ? trx.Tanggal.split('T')[1].substring(0,5) : ''; } catch(e) {}
+                    printData.value = { id: trx.ID, tanggal: formatTgl(trx.Tanggal), waktu: waktu, kasir: currentUser.value?.Nama || 'Admin', items: items, total: total, bayar: bayar, kembali: trx.Kembali, sisa: sisa, kontak: trx.Pelanggan || trx.Supplier || 'Umum', tipe: type };
                     setTimeout(() => window.print(), 500);
                 };
 
                 const printPayment = (row, type) => {
                     printMode.value = 'struk_bayar';
-                    printData.value = { id: row.ID_Trx, tanggal: formatTgl(row.Tanggal), kontak: row.Pelanggan || row.Supplier, jumlah: row.JumlahBayar, keterangan: row.Keterangan, tipe: type === 'bayar_hutang' ? 'Hutang' : 'Piutang' };
+                    let waktu = ''; try { waktu = row.Tanggal.includes('T') ? row.Tanggal.split('T')[1].substring(0,5) : ''; } catch(e) {}
+                    printData.value = { id: row.ID_Trx, tanggal: formatTgl(row.Tanggal), waktu: waktu, kasir: currentUser.value?.Nama || 'Admin', kontak: row.Pelanggan || row.Supplier, jumlah: row.JumlahBayar, keterangan: row.Keterangan, tipe: type === 'bayar_hutang' ? 'Hutang' : 'Piutang' };
                     setTimeout(() => window.print(), 500);
                 };
 
