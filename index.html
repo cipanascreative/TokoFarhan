@@ -275,9 +275,16 @@
                     <!-- MENU: POS Kasir -->
                     <div v-else-if="currentRoute === 'pos'" class="flex flex-col lg:flex-row gap-6 h-full">
                         <div class="w-full lg:w-7/12 flex flex-col bg-white rounded-xl shadow-sm border border-slate-100 p-4">
-                            <div class="mb-4">
+                            <div class="mb-4 flex flex-col space-y-2">
                                 <input type="text" v-model="posSearch" placeholder="Cari Nama/Kode Barang..." class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
-                                <p class="text-xs text-slate-500 mt-1 italic" v-if="posSearch === ''">Ketik kode atau nama barang untuk menampilkan produk...</p>
+                                <div class="flex justify-between items-center px-1">
+                                    <!-- FITUR BARU: Checkbox Tampilkan Stok Kosong di Kasir -->
+                                    <div class="flex items-center space-x-2">
+                                        <input type="checkbox" id="showEmptyStockPos" v-model="showEmptyStockPos" class="w-4 h-4 text-blue-600 rounded cursor-pointer">
+                                        <label for="showEmptyStockPos" class="text-xs text-slate-600 cursor-pointer font-medium">Tampilkan stok kosong</label>
+                                    </div>
+                                    <p class="text-[10px] text-slate-500 italic" v-if="posSearch === ''">Ketik kode atau nama barang...</p>
+                                </div>
                             </div>
                             <div class="flex-1 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-3 content-start">
                                 <div v-for="b in filteredPosBarang" @click="addToCart(b, 'pos')" :class="`border rounded-lg p-3 cursor-pointer hover:border-blue-500 hover:shadow-md transition flex flex-col justify-between h-28 relative ${b.StokBagus <= 0 ? 'bg-slate-100 opacity-75' : 'bg-slate-50'}`">
@@ -289,6 +296,9 @@
                                         <span class="text-blue-600 font-bold text-sm">{{ formatRp(b.HargaJual) }}<span class="text-[10px] text-slate-500 font-normal"> /{{ b.SatuanJual||'Pcs' }}</span></span>
                                         <span :class="`text-xs px-1.5 py-0.5 rounded font-bold ${b.StokBagus <= 0 ? 'bg-rose-100 text-rose-700' : 'bg-slate-200 text-slate-700'}`">Sisa: {{ b.StokBagus || 0 }}</span>
                                     </div>
+                                </div>
+                                <div v-if="filteredPosBarang.length === 0" class="col-span-full text-center text-slate-400 italic py-10 text-sm">
+                                    Produk tidak ditemukan.
                                 </div>
                             </div>
                         </div>
@@ -794,8 +804,10 @@
                 const posSearch = ref('');
                 const beliSearch = ref('');
                 
+                // Variabel untuk mengontrol filter stok kosong
                 const showEmptyStockBarang = ref(false);
                 const showEmptyStockReport = ref(false);
+                const showEmptyStockPos = ref(false); // FITUR BARU untuk POS Kasir
 
                 const pos = ref({ tanggal: todayDate.value, pelanggan: '', items: [], editingId: null });
                 const beli = ref({ tanggal: todayDate.value, supplier: '', items: [], editingId: null });
@@ -1009,13 +1021,26 @@
                     return dbList.slice(0, 10);
                 };
 
+                // FITUR BARU: Pemrosesan filter POS
                 const filteredPosBarang = computed(() => {
-                    if (posSearch.value.trim() === '') return [];
+                    // Hanya tampilkan jika user mengetik sesuatu (posSearch tidak kosong)
+                    if (posSearch.value.trim() === '') {
+                        return [];
+                    }
+                    
                     const q = posSearch.value.toLowerCase();
-                    return (db.value.barang || []).filter(b => 
+                    let data = (db.value.barang || []).filter(b => 
                         b.Nama.toLowerCase().includes(q) || b.Kode.toLowerCase().includes(q)
                     );
+                    
+                    // Filter stok kosong berdasarkan checkbox
+                    if (!showEmptyStockPos.value) {
+                        data = data.filter(b => (Number(b.StokBagus) || 0) > 0);
+                    }
+
+                    return data;
                 });
+                
                 const filteredBeliBarang = computed(() => getTopItems(beliSearch.value, db.value.barang));
 
                 const formFields = computed(() => {
@@ -1593,7 +1618,7 @@
 
                 return {
                     loading, isLoggedIn, currentUser, loginForm, isAdmin, hasAccess, doLogin, doLogout, sidebarOpen, currentRoute, routeTitle, todayDate, toast, db, tableSearch, posSearch, beliSearch, pos, beli, barangRusakForm, barangRusakSearch,
-                    showEmptyStockBarang, showEmptyStockReport,
+                    showEmptyStockBarang, showEmptyStockReport, showEmptyStockPos, // EXPORT VARIABEL BARU
                     formHutang, formPiutang, listHutang, listPiutang, reportType, reportFilterDate, reportFilterSupplier, reportFilterPelanggan, modal, formData, paymentModal, settingsForm, formFields, tableColumns, filteredTableData,
                     filteredPosBarang, filteredBeliBarang, posTotal, beliTotal, dashboardStats, filteredBarangRusakList, pelangganPiutangTotal, filteredReports, reportDynamicColumns, reportTotals, printMode, printData, printHTMLContent,
                     rolePermissions, roleModal, availablePermissions, openRoleModal, saveRole, deleteRole, exportCSV, handleImportCSV,
